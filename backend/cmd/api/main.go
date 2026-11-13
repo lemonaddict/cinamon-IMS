@@ -16,6 +16,7 @@ import (
 	"ims/internal/auth"
 	"ims/internal/catalog"
 	"ims/internal/config"
+	"ims/internal/finance"
 	"ims/internal/httpx"
 	"ims/internal/inventory"
 )
@@ -59,6 +60,7 @@ func main() {
 			authH.Private(priv)
 			(&catalog.Handler{DB: pool}).Routes(priv)
 			(&inventory.Service{DB: pool}).Routes(priv)
+			(&finance.Handler{DB: pool}).Routes(priv)
 		})
 	})
 

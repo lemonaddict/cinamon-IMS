@@ -118,22 +118,26 @@ func (h *Handler) named(r chi.Router, path, table string) {
 }
 
 type product struct {
-	ID          int64   `json:"id"`
-	CategoryID  *int64  `json:"category_id"`
-	Name        string  `json:"name"`
-	SKU         string  `json:"sku"`
-	Description string  `json:"description"`
-	ImagePath   *string `json:"image_path"`
+	ID           int64   `json:"id"`
+	CategoryID   *int64  `json:"category_id"`
+	Name         string  `json:"name"`
+	SKU          string  `json:"sku"`
+	CostPrice    int64   `json:"cost_price"`
+	SellingPrice int64   `json:"selling_price"`
+	Description  string  `json:"description"`
+	ImagePath    *string `json:"image_path"`
 }
 
 type productIn struct {
-	CategoryID  *int64 `json:"category_id"`
-	Name        string `json:"name"`
-	SKU         string `json:"sku"`
-	Description string `json:"description"`
+	CategoryID   *int64 `json:"category_id"`
+	Name         string `json:"name"`
+	SKU          string `json:"sku"`
+	CostPrice    int64  `json:"cost_price"`
+	SellingPrice int64  `json:"selling_price"`
+	Description  string `json:"description"`
 }
 
-const productCols = `id, category_id, name, sku, description, image_path`
+const productCols = `id, category_id, name, sku, cost_price, selling_price, description, image_path`
 
 func readProduct(w http.ResponseWriter, r *http.Request) (productIn, bool) {
 	var in productIn
@@ -145,12 +149,16 @@ func readProduct(w http.ResponseWriter, r *http.Request) (productIn, bool) {
 		httpx.Err(w, http.StatusUnprocessableEntity, "name (max 200) and sku (max 64) are required; description max 2000")
 		return in, false
 	}
+	if in.CostPrice < 0 || in.SellingPrice < 0 {
+		httpx.Err(w, http.StatusUnprocessableEntity, "cost_price and selling_price must be 0 or greater")
+		return in, false
+	}
 	return in, true
 }
 
 func scanProduct(row pgx.Row) (product, error) {
 	var p product
-	err := row.Scan(&p.ID, &p.CategoryID, &p.Name, &p.SKU, &p.Description, &p.ImagePath)
+	err := row.Scan(&p.ID, &p.CategoryID, &p.Name, &p.SKU, &p.CostPrice, &p.SellingPrice, &p.Description, &p.ImagePath)
 	return p, err
 }
 
@@ -177,8 +185,8 @@ func (h *Handler) createProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := scanProduct(h.DB.QueryRow(r.Context(),
-		`INSERT INTO products (user_id, category_id, name, sku, description) VALUES ($1,$2,$3,$4,$5) RETURNING `+productCols,
-		auth.UserID(r.Context()), in.CategoryID, in.Name, in.SKU, in.Description))
+		`INSERT INTO products (user_id, category_id, name, sku, cost_price, selling_price, description) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING `+productCols,
+		auth.UserID(r.Context()), in.CategoryID, in.Name, in.SKU, in.CostPrice, in.SellingPrice, in.Description))
 	if err != nil {
 		httpx.DBError(w, err)
 		return
@@ -210,9 +218,9 @@ func (h *Handler) updateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := scanProduct(h.DB.QueryRow(r.Context(),
-		`UPDATE products SET category_id=$3, name=$4, sku=$5, description=$6, updated_at=now()
+		`UPDATE products SET category_id=$3, name=$4, sku=$5, cost_price=$6, selling_price=$7, description=$8, updated_at=now()
 		 WHERE user_id = $1 AND id = $2 RETURNING `+productCols,
-		auth.UserID(r.Context()), id, in.CategoryID, in.Name, in.SKU, in.Description))
+		auth.UserID(r.Context()), id, in.CategoryID, in.Name, in.SKU, in.CostPrice, in.SellingPrice, in.Description))
 	if err != nil {
 		httpx.DBError(w, err)
 		return

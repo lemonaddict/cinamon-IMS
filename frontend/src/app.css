@@ -5,11 +5,18 @@
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #12111f; --panel: #1b1a2e; --ink: #eceaff; --muted: #a09dc6; --line: #2d2b49;
     --pri: #a99cff; --soft: #26234a; --ok: #4ade80; --okbg: #12301f; --warn: #fbbf24; --warnbg: #33260d;
     --bad: #fca5a5; --badbg: #3a1618; --shadow: none;
   }
+}
+:root[data-theme='light'] { color-scheme: light; }
+:root[data-theme='dark'] {
+  --bg: #12111f; --panel: #1b1a2e; --ink: #eceaff; --muted: #a09dc6; --line: #2d2b49;
+  --pri: #a99cff; --soft: #26234a; --ok: #4ade80; --okbg: #12301f; --warn: #fbbf24; --warnbg: #33260d;
+  --bad: #fca5a5; --badbg: #3a1618; --shadow: none;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; }
@@ -73,6 +80,11 @@ option { background: var(--panel); color: var(--ink); }
 .seg { display: inline-flex; flex-wrap: wrap; background: var(--soft); border-radius: 12px; padding: 4px; gap: 4px; margin-bottom: 12px; }
 .seg button { display: flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--muted); padding: 7px 12px; border-radius: 9px; font: inherit; font-weight: 600; cursor: pointer; }
 .seg button.on { background: var(--panel); color: var(--pri); box-shadow: var(--shadow); }
+.seg.one-row { display: flex; width: 100%; flex-wrap: nowrap; }
+.seg.one-row button { flex: 1 1 0; justify-content: center; white-space: nowrap; min-width: 0; }
+@media (max-width: 820px) {
+  .seg.one-row button { padding: 7px 6px; font-size: 12.5px; gap: 4px; }
+}
 
 /* tables */
 .wrap { overflow-x: auto; }
@@ -140,6 +152,8 @@ select { appearance: none; -webkit-appearance: none; text-overflow: ellipsis; pa
 .dd-list button:hover, .dd-list button.on { background: var(--soft); }
 .dd-list button.on { color: var(--pri); font-weight: 600; }
 .dd-empty { padding: 10px 12px; }
+.dd-search { position: sticky; top: 0; z-index: 1; margin-bottom: 6px; padding: 0 10px; }
+.dd-search input { padding: 7px 0; font-size: 14px; }
 @media (min-width: 821px) { .card.wrap { overflow: visible; } }
 @media (max-width: 820px) {
   form .dd { flex: 1 1 100%; }

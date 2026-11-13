@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { LayoutDashboard, Package, ArrowLeftRight, History as IconHistory, RefreshCw, Settings, LogOut, Boxes, Wifi, WifiOff, CloudOff } from 'lucide-svelte';
+  import { LayoutDashboard, Package, ArrowLeftRight, Wallet, History as IconHistory, RefreshCw, Settings, LogOut, Boxes, Wifi, WifiOff, CloudOff } from 'lucide-svelte';
   import { api } from './api';
   import { online, pending, setUser, sync, clearCache, cached } from './offline';
   import Login from './Login.svelte';
   import Dashboard from './Dashboard.svelte';
   import Products from './Products.svelte';
   import Stock from './Stock.svelte';
+  import Finance from './Finance.svelte';
   import History from './History.svelte';
   import Sync from './Sync.svelte';
   import Setup from './Setup.svelte';
@@ -16,11 +17,12 @@
     { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard, sec: false },
     { id: 'products', label: 'Produk', icon: Package, sec: false },
     { id: 'stock', label: 'Stok', icon: ArrowLeftRight, sec: false },
+    { id: 'finance', label: 'Keuangan', icon: Wallet, sec: false },
     { id: 'history', label: 'Riwayat', icon: IconHistory, sec: false },
     { id: 'sync', label: 'Sinkron', icon: RefreshCw, sec: true },
     { id: 'setup', label: 'Pengaturan', icon: Settings, sec: true },
   ];
-  const pages: Record<string, any> = { dashboard: Dashboard, products: Products, stock: Stock, history: History, sync: Sync, setup: Setup };
+  const pages: Record<string, any> = { dashboard: Dashboard, products: Products, stock: Stock, finance: Finance, history: History, sync: Sync, setup: Setup };
 
   let user: { id: number; name: string } | null = null;
   let ready = false;
@@ -49,7 +51,7 @@
 {:else}
   <div class="shell">
     <aside class="side">
-      <div class="brand"><Boxes size={26} /> CINAMON</div>
+      <div class="brand"><Boxes size={26} /> CIMOL</div>
       <nav>
         {#each tabs as t}
           <button class:on={tab === t.id} class:sec={t.sec} aria-current={tab === t.id ? 'page' : undefined} on:click={() => (tab = t.id)}>

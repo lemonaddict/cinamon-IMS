@@ -24,6 +24,12 @@ const ID: Record<string, string> = {
   'name, a valid email and a 10-72 character password are required': 'Isi nama, email yang valid, dan kata sandi 10–72 karakter.',
   'name is required (max 200 characters)': 'Nama wajib diisi (maksimal 200 karakter).',
   'name (max 200) and sku (max 64) are required; description max 2000': 'Nama dan SKU wajib diisi.',
+  'cost_price and selling_price must be 0 or greater': 'Harga beli dan harga jual minimal 0.',
+  'entry_type must be income or expense': 'Jenis transaksi harus pemasukan atau pengeluaran.',
+  'category is required (max 100 characters)': 'Kategori wajib diisi (maksimal 100 karakter).',
+  'amount must be a positive integer': 'Nominal harus bilangan bulat lebih dari 0.',
+  'entry_date must be YYYY-MM-DD': 'Format tanggal harus YYYY-MM-DD.',
+  'notes max 500 characters': 'Catatan maksimal 500 karakter.',
   'quantity must be a positive integer': 'Jumlah harus bilangan bulat lebih dari 0.',
   'invalid JSON body': 'Data yang dikirim tidak valid.',
   'internal error': 'Terjadi gangguan di server. Coba lagi.',
@@ -31,6 +37,9 @@ const ID: Record<string, string> = {
 
 export const msg = (e: unknown): string =>
   e instanceof ApiError ? e.message : e instanceof TypeError ? 'Tidak ada koneksi internet.' : (e as Error).message;
+
+export const idr = (n: number): string =>
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n ?? 0);
 
 export async function api<T = any>(path: string, method = 'GET', body?: unknown): Promise<T> {
   if (!navigator.onLine) throw new TypeError('offline'); // device has no network: do not even try
