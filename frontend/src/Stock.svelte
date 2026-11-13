@@ -2,6 +2,7 @@
   import { ArrowDownToLine, ArrowUpFromLine, SlidersHorizontal, ClipboardCheck, ArrowLeftRight, Package, MapPin, Save, Inbox, CloudOff, CheckCircle2 } from 'lucide-svelte';
   import { msg } from './api';
   import { cached, submit } from './offline';
+  import Select from './Select.svelte';
 
   type Opt = { id: number; name: string; sku?: string };
   type Bal = { sku: string; product: string; location: string; quantity: number };
@@ -17,6 +18,9 @@
   let opLoc = 0;
   let counts: Record<number, string> = {};
   let info = '', error = '', queued = false;
+  $: productOptions = products.map((p) => ({ value: p.id, label: `${p.name} (${p.sku})` }));
+  $: locationOptions = locations.map((l) => ({ value: l.id, label: l.name }));
+  const dirOptions = [{ value: 'in', label: 'Tambah' }, { value: 'out', label: 'Kurangi' }];
 
   async function load() {
     [products, locations, balances] = await Promise.all([cached('/products?limit=100'), cached('/locations?limit=100'), cached('/stock/balances?limit=100')]);
@@ -59,10 +63,10 @@
       {#each types as t}<button type="button" class:on={m.type === t.v} on:click={() => (m.type = t.v)}><svelte:component this={t.icon} size={16} />{t.label}</button>{/each}
     </div>
     <form on:submit|preventDefault={post}>
-      <label class="field"><Package size={18} /><select bind:value={m.product_id} aria-label="Produk">{#each products as p}<option value={p.id}>{p.name} ({p.sku})</option>{/each}</select></label>
-      <label class="field"><MapPin size={18} /><select bind:value={m.location_id} aria-label="Lokasi">{#each locations as l}<option value={l.id}>{l.name}</option>{/each}</select></label>
+      <Select bind:value={m.product_id} label="Produk" icon={Package} options={productOptions} />
+      <Select bind:value={m.location_id} label="Lokasi" icon={MapPin} options={locationOptions} />
       {#if m.type === 'adjustment'}
-        <label class="field"><SlidersHorizontal size={18} /><select bind:value={m.direction} aria-label="Arah penyesuaian"><option value="in">Tambah</option><option value="out">Kurangi</option></select></label>
+        <Select bind:value={m.direction} label="Arah penyesuaian" icon={SlidersHorizontal} options={dirOptions} />
       {/if}
       <label class="field"><input type="number" min="1" placeholder="Jumlah" aria-label="Jumlah" bind:value={m.quantity} required /></label>
       <label class="field"><input placeholder="Catatan (opsional)" bind:value={m.notes} /></label>
@@ -73,7 +77,7 @@
   <div class="card wrap">
     <h3><ClipboardCheck size={18} /> Hitung stok di lokasi</h3>
     <form on:submit|preventDefault={opname}>
-      <label class="field"><MapPin size={18} /><select bind:value={opLoc} aria-label="Lokasi hitung">{#each locations as l}<option value={l.id}>{l.name}</option>{/each}</select></label>
+      <Select bind:value={opLoc} label="Lokasi hitung" icon={MapPin} options={locationOptions} />
       <button class="btn"><Save size={18} /> Simpan hasil hitung</button>
     </form>
     <table>

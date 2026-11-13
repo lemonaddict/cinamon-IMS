@@ -2,6 +2,7 @@
   import { Plus, Trash2, Search, Package, Tag, Inbox } from 'lucide-svelte';
   import { api, msg } from './api';
   import { cached } from './offline';
+  import Select from './Select.svelte';
 
   type Cat = { id: number; name: string };
   type Product = { id: number; name: string; sku: string; category_id: number | null };
@@ -22,6 +23,7 @@
   const add = () => run(async () => { await api('/products', 'POST', f); f = blank(); });
   const del = (p: Product) => confirm(`Hapus produk "${p.name}"?`) && run(() => api(`/products/${p.id}`, 'DELETE'));
   const catName = (id: number | null) => cats.find((c) => c.id === id)?.name ?? '—';
+  $: catOptions = [{ value: null, label: 'Tanpa kategori' }, ...cats.map((c) => ({ value: c.id, label: c.name }))];
   $: shown = products.filter((p) => (p.name + p.sku).toLowerCase().includes(q.toLowerCase()));
   load().catch((e) => (error = msg(e)));
 </script>
@@ -31,10 +33,7 @@
   <form on:submit|preventDefault={add}>
     <label class="field"><Package size={18} /><input placeholder="Nama produk" bind:value={f.name} required /></label>
     <label class="field"><Tag size={18} /><input placeholder="SKU" bind:value={f.sku} required /></label>
-    <label class="field"><select bind:value={f.category_id} aria-label="Kategori">
-      <option value={null}>Tanpa kategori</option>
-      {#each cats as c}<option value={c.id}>{c.name}</option>{/each}
-    </select></label>
+    <Select bind:value={f.category_id} label="Kategori" options={catOptions} />
     <label class="field"><input placeholder="Deskripsi (opsional)" bind:value={f.description} /></label>
     <button class="btn"><Plus size={18} /> Simpan produk</button>
   </form>

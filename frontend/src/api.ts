@@ -1,6 +1,9 @@
 // Empty = same origin (Vite proxy). Set VITE_API_URL only to call the backend directly (needs CORS).
 const BASE: string = import.meta.env.VITE_API_URL ?? '';
 
+let onReach: (ok: boolean) => void = () => {};
+export const setReachHandler = (fn: (ok: boolean) => void) => { onReach = fn; };
+
 export class ApiError extends Error {
   constructor(message: string, public status: number) {
     super(message);
@@ -30,12 +33,20 @@ export const msg = (e: unknown): string =>
   e instanceof ApiError ? e.message : e instanceof TypeError ? 'Tidak ada koneksi internet.' : (e as Error).message;
 
 export async function api<T = any>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  const res = await fetch(BASE + '/api' + path, {
+  if (!navigator.onLine) throw new TypeError('offline'); // device has no network: do not even try
+  let res: Response;
+  try {
+  res = await fetch(BASE + '/api' + path, {
     method,
     credentials: BASE ? 'include' : 'same-origin',
     headers: body ? { 'Content-Type': 'application/json' } : {},
     body: body ? JSON.stringify(body) : undefined,
   });
+  } catch (e) {
+    onReach(false); // no answer from the server
+    throw e;
+  }
+  onReach(true); // any HTTP answer (even an error) means the server is reachable
   if (res.status === 401 && path !== '/me' && !path.startsWith('/auth/')) {
     location.reload(); // sesi habis: muat ulang menampilkan layar masuk
   }

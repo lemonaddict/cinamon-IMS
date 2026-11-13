@@ -11,13 +11,14 @@
   import Sync from './Sync.svelte';
   import Setup from './Setup.svelte';
 
+  // sec = secondary: shown in the sidebar on desktop, moved to the header on phones
   const tabs = [
-    { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard },
-    { id: 'products', label: 'Produk', icon: Package },
-    { id: 'stock', label: 'Stok', icon: ArrowLeftRight },
-    { id: 'history', label: 'Riwayat', icon: IconHistory },
-    { id: 'sync', label: 'Sinkron', icon: RefreshCw },
-    { id: 'setup', label: 'Pengaturan', icon: Settings },
+    { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard, sec: false },
+    { id: 'products', label: 'Produk', icon: Package, sec: false },
+    { id: 'stock', label: 'Stok', icon: ArrowLeftRight, sec: false },
+    { id: 'history', label: 'Riwayat', icon: IconHistory, sec: false },
+    { id: 'sync', label: 'Sinkron', icon: RefreshCw, sec: true },
+    { id: 'setup', label: 'Pengaturan', icon: Settings, sec: true },
   ];
   const pages: Record<string, any> = { dashboard: Dashboard, products: Products, stock: Stock, history: History, sync: Sync, setup: Setup };
 
@@ -51,8 +52,8 @@
       <div class="brand"><Boxes size={26} /> Inventori</div>
       <nav>
         {#each tabs as t}
-          <button class:on={tab === t.id} aria-current={tab === t.id ? 'page' : undefined} on:click={() => (tab = t.id)}>
-            <svelte:component this={t.icon} size={20} /><span>{t.label}</span>
+          <button class:on={tab === t.id} class:sec={t.sec} aria-current={tab === t.id ? 'page' : undefined} on:click={() => (tab = t.id)}>
+            <svelte:component this={t.icon} size={22} /><span>{t.label}</span>
             {#if t.id === 'sync' && $pending > 0}<em>{$pending}</em>{/if}
           </button>
         {/each}
@@ -65,10 +66,12 @@
           <span class="muted">Halo, {user.name}</span>
         </div>
         <div class="cell">
-          <span class="pill" class:off={!$online}>
+          <button class="pill" class:off={!$online} on:click={() => (tab = 'sync')} aria-label="Status koneksi dan sinkronisasi">
             {#if $online}<Wifi size={16} /> Online{:else}<WifiOff size={16} /> Offline{/if}
-          </span>
-          <button class="btn ghost sm" on:click={logout}><LogOut size={16} /> Keluar</button>
+            {#if $pending > 0}<em>{$pending}</em>{/if}
+          </button>
+          <button class="btn ghost sm icon m-only" aria-label="Pengaturan" on:click={() => (tab = 'setup')}><Settings size={18} /></button>
+          <button class="btn ghost sm" aria-label="Keluar" on:click={logout}><LogOut size={16} /><span class="lbl">Keluar</span></button>
         </div>
       </header>
       {#if !$online}

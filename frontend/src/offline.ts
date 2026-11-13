@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { api, ApiError } from './api';
+import { api, ApiError, setReachHandler } from './api';
 
 export type Op = {
   id: string; // also the idempotency key: the server never applies the same id twice
@@ -51,12 +51,10 @@ export function setUser(id: number) {
 export async function cached<T = any>(path: string): Promise<T> {
   try {
     const data = await api<T>(path);
-    online.set(true);
     run('cache', 'readwrite', (s) => s.put(data, key(path))).catch(() => {});
     return data;
   } catch (e) {
     if (!isNetworkError(e)) throw e;
-    online.set(false);
     const hit = await run<T | undefined>('cache', 'readonly', (s) => s.get(key(path)));
     if (hit === undefined) throw new Error('Belum ada data offline. Buka halaman ini sekali saat online.');
     return hit;
@@ -69,11 +67,9 @@ export async function submit(kind: Op['kind'], path: string, body: any, label: s
   const payload = { ...body, idempotency_key: id, ...(kind === 'opname' ? { observed_at: new Date().toISOString() } : {}) };
   try {
     const res = await api(path, 'POST', payload);
-    online.set(true);
     return { queued: false, res };
   } catch (e) {
     if (!isNetworkError(e)) throw e;
-    online.set(false);
     await queuePut({ id, uid, kind, path, body: payload, label, createdAt: new Date().toISOString(), status: 'pending' });
     await refresh();
     return { queued: true, res: null };
@@ -106,10 +102,9 @@ export async function sync() {
       if (op.status !== 'pending') continue;
       try {
         await api(op.path, 'POST', op.body); // a replayed idempotency key is answered without re-applying
-        online.set(true);
         await queueDel(op.id);
       } catch (e) {
-        if (isNetworkError(e)) { online.set(false); break; }
+        if (isNetworkError(e)) break;
         await queuePut({ ...op, status: 'conflict', error: (e as Error).message });
       }
     }
@@ -119,6 +114,16 @@ export async function sync() {
   }
 }
 
-addEventListener('online', () => { online.set(true); sync(); });
+// "Online" = the device has a network AND the server answered the latest request.
+// api() reports every outcome here, so the badge can no longer flip back by accident.
+setReachHandler((ok) => online.set(navigator.onLine && ok));
+
+// Heartbeat: notice the server coming back (or going away) without waiting for a click.
+async function probe() {
+  if (document.hidden || !navigator.onLine) return;
+  try { await api('/me'); } catch { /* api() already reported the result */ }
+  await sync();
+}
+addEventListener('online', probe);
 addEventListener('offline', () => online.set(false));
-setInterval(() => navigator.onLine && sync(), 30000);
+setInterval(probe, 15000);

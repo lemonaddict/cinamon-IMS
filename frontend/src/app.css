@@ -107,3 +107,43 @@ tr:last-child td { border-bottom: 0; }
   .cols, .auth { grid-template-columns: 1fr; }
   .hero { display: none; }
 }
+
+/* status pill is a button; fields use one compact, consistent dropdown style */
+.pill { border: 0; font-family: inherit; cursor: pointer; }
+.pill em { font-style: normal; background: #fb7185; color: #fff; border-radius: 99px; padding: 0 7px; font-size: 12px; }
+.m-only { display: none; }
+.btn.icon { padding: 8px; }
+select { appearance: none; -webkit-appearance: none; text-overflow: ellipsis; padding-right: 22px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238a87b0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 2px center; }
+
+@media (max-width: 820px) {
+  input, select { font-size: 16px; padding: 11px 0; } /* 16px stops iOS from zooming into the field */
+  form .field { flex: 1 1 100%; }
+  form .btn { width: 100%; }
+  .m-only { display: inline-flex; }
+  .btn .lbl { display: none; }
+  .side nav button.sec { display: none; } /* Sinkron and Pengaturan live in the header on phones */
+  .side nav button { flex: 1; min-height: 56px; justify-content: center; font-size: 12px; gap: 3px; }
+  .content { padding-bottom: 104px; }
+  .top h1 { font-size: 22px; }
+  .stats { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { padding: 14px; }
+  .stat b { font-size: 26px; }
+}
+
+/* custom dropdown: popover on desktop, bottom sheet on phones */
+.dd { position: relative; flex: 1 1 180px; min-width: 0; }
+.dd-btn { width: 100%; font: inherit; text-align: left; cursor: pointer; min-height: 44px; }
+.dd-val { flex: 1; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-backdrop { position: fixed; inset: 0; z-index: 40; border: 0; padding: 0; background: transparent; cursor: default; }
+.dd-list { position: absolute; z-index: 50; left: 0; right: 0; top: calc(100% + 6px); max-height: 260px; overflow: auto; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(40, 20, 120, .18); }
+.dd-list button { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.dd-list button:hover, .dd-list button.on { background: var(--soft); }
+.dd-list button.on { color: var(--pri); font-weight: 600; }
+.dd-empty { padding: 10px 12px; }
+@media (min-width: 821px) { .card.wrap { overflow: visible; } }
+@media (max-width: 820px) {
+  form .dd { flex: 1 1 100%; }
+  .dd-backdrop { background: rgba(10, 8, 30, .45); }
+  .dd-list { position: fixed; top: auto; bottom: 0; max-height: 60vh; padding: 10px 10px calc(14px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 18px 18px 0 0; box-shadow: 0 -12px 32px rgba(10, 8, 30, .3); }
+  .dd-list button { padding: 14px 12px; font-size: 16px; }
+}
