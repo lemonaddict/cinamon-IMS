@@ -132,44 +132,57 @@ func (s *Service) Post(ctx context.Context, uid int64, m MovementIn) (id int64, 
 		if err != nil {
 			return 0, false, err
 		}
-		if m.Type == "in" || m.Type == "out" {
-			if err = recordFinance(ctx, tx, uid, m.Type, it.ProductID, it.Quantity, m.Notes); err != nil {
-				return 0, false, err
-			}
+	}
+	if m.Type == "in" || m.Type == "out" {
+		if err = recordFinance(ctx, tx, uid, m); err != nil {
+			return 0, false, err
 		}
 	}
 	return id, false, tx.Commit(ctx)
 }
 
 // recordFinance logs stock-in (cost_price as expense) and stock-out (selling_price as income)
-// into finance_entries within the same transaction, skipping items with zero price.
-func recordFinance(ctx context.Context, tx pgx.Tx, uid int64, moveType string, productID, qty int64, userNotes string) error {
-	var name string
-	var costPrice, sellingPrice int64
-	if err := tx.QueryRow(ctx,
-		`SELECT name, cost_price, selling_price FROM products WHERE user_id = $1 AND id = $2`,
-		uid, productID).Scan(&name, &costPrice, &sellingPrice); err != nil {
-		return err
+// as a single combined finance_entries row per movement, skipping items with zero price.
+func recordFinance(ctx context.Context, tx pgx.Tx, uid int64, m MovementIn) error {
+	entryType, category := "expense", "Pembelian Stok"
+	if m.Type == "out" {
+		entryType, category = "income", "Penjualan"
 	}
-	entryType, category, unitPrice := "expense", "Pembelian Stok", costPrice
-	if moveType == "out" {
-		entryType, category, unitPrice = "income", "Penjualan", sellingPrice
+	var totalAmount int64
+	var parts []string
+	for _, it := range m.Items {
+		var name string
+		var costPrice, sellingPrice int64
+		if err := tx.QueryRow(ctx,
+			`SELECT name, cost_price, selling_price FROM products WHERE user_id = $1 AND id = $2`,
+			uid, it.ProductID).Scan(&name, &costPrice, &sellingPrice); err != nil {
+			return err
+		}
+		unitPrice := costPrice
+		if m.Type == "out" {
+			unitPrice = sellingPrice
+		}
+		itemAmount := unitPrice * it.Quantity
+		if itemAmount <= 0 {
+			continue
+		}
+		totalAmount += itemAmount
+		parts = append(parts, fmt.Sprintf("%s × %d", name, it.Quantity))
 	}
-	amount := unitPrice * qty
-	if amount <= 0 {
+	if totalAmount <= 0 {
 		return nil
 	}
-	notes := fmt.Sprintf("%s × %d", name, qty)
-	if extra := strings.TrimSpace(userNotes); extra != "" {
+	notes := strings.Join(parts, ", ")
+	if extra := strings.TrimSpace(m.Notes); extra != "" {
 		notes += " — " + extra
 	}
 	if len(notes) > 500 {
-		notes = notes[:500]
+		notes = notes[:497] + "..."
 	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO finance_entries (user_id, entry_type, category, amount, entry_date, notes)
 		 VALUES ($1, $2, $3, $4, CURRENT_DATE, $5)`,
-		uid, entryType, category, amount, notes)
+		uid, entryType, category, totalAmount, notes)
 	return err
 }
 

@@ -55,6 +55,14 @@ var historyCols = []col{
 	{"Lokasi", 20},
 }
 
+var financeCols = []col{
+	{"Tanggal", 14},
+	{"Jenis", 14},
+	{"Kategori", 22},
+	{"Keterangan", 34},
+	{"Nominal", 18},
+}
+
 // --- handler ---
 
 func (h *Handler) inventory(w http.ResponseWriter, r *http.Request) {
@@ -75,6 +83,11 @@ func (h *Handler) inventory(w http.ResponseWriter, r *http.Request) {
 		httpx.DBError(w, err)
 		return
 	}
+	finRows, err := h.loadFinance(r, uid, from, to)
+	if err != nil {
+		httpx.DBError(w, err)
+		return
+	}
 
 	f := excelize.NewFile()
 	defer func() { _ = f.Close() }()
@@ -87,6 +100,10 @@ func (h *Handler) inventory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := writeHistorySheet(f, history, periodLabel, downloadedAt); err != nil {
+		httpx.Err(w, http.StatusInternalServerError, "failed to build workbook")
+		return
+	}
+	if err := writeFinanceSheet(f, finRows, periodLabel, downloadedAt); err != nil {
 		httpx.Err(w, http.StatusInternalServerError, "failed to build workbook")
 		return
 	}
@@ -156,6 +173,30 @@ func (h *Handler) loadHistory(r *http.Request, uid int64, from, to time.Time) ([
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[historyRow])
 }
 
+type financeRow struct {
+	EntryDate string
+	EntryType string
+	Category  string
+	Notes     string
+	Amount    int64
+}
+
+func (h *Handler) loadFinance(r *http.Request, uid int64, from, to time.Time) ([]financeRow, error) {
+	rows, err := h.DB.Query(r.Context(),
+		`SELECT to_char(entry_date, 'YYYY-MM-DD'), entry_type, category, notes, amount
+		 FROM finance_entries
+		 WHERE user_id = $1
+		   AND entry_date >= $2::date
+		   AND entry_date <  $3::date
+		 ORDER BY entry_date DESC, id DESC
+		 LIMIT $4`,
+		uid, from.Format("2006-01-02"), to.Format("2006-01-02"), maxHistoryRows)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[financeRow])
+}
+
 // --- sheet writers ---
 
 func writeSummarySheet(f *excelize.File, rows []balanceRow, period string, at time.Time) error {
@@ -223,6 +264,58 @@ func writeHistorySheet(f *excelize.File, rows []historyRow, period string, at ti
 		_ = f.SetCellValue(name, cell(4, r), row.Quantity)
 		_ = f.SetCellValue(name, cell(5, r), row.CreatedAt.Format("02 Jan 2006 15:04"))
 		_ = f.SetCellValue(name, cell(6, r), row.Location)
+	}
+
+	if len(rows) >= maxHistoryRows {
+		note := headerRow + 1 + len(rows)
+		_ = f.SetCellValue(name, cell(1, note), fmt.Sprintf("(data dibatasi %d baris)", maxHistoryRows))
+	}
+	return nil
+}
+
+func writeFinanceSheet(f *excelize.File, rows []financeRow, period string, at time.Time) error {
+	const name = "Keuangan"
+	if _, err := f.NewSheet(name); err != nil {
+		return err
+	}
+
+	_ = f.SetCellValue(name, "A1", "Export Inventory — Catatan Keuangan")
+	_ = f.SetCellValue(name, "A2", "Periode: "+period)
+	_ = f.SetCellValue(name, "A3", "Diunduh: "+at.Format("02 Jan 2006 15:04"))
+
+	var totalIncome, totalExpense int64
+	for _, row := range rows {
+		if row.EntryType == "income" {
+			totalIncome += row.Amount
+		} else {
+			totalExpense += row.Amount
+		}
+	}
+	_ = f.SetCellValue(name, "A5", "Total Pemasukan")
+	_ = f.SetCellValue(name, "B5", totalIncome)
+	_ = f.SetCellValue(name, "A6", "Total Pengeluaran")
+	_ = f.SetCellValue(name, "B6", totalExpense)
+	_ = f.SetCellValue(name, "A7", "Saldo Bersih")
+	_ = f.SetCellValue(name, "B7", totalIncome-totalExpense)
+
+	headerRow := 9
+	for i, c := range financeCols {
+		_ = f.SetCellValue(name, cell(i+1, headerRow), c.Header)
+		colName, _ := excelize.ColumnNumberToName(i + 1)
+		_ = f.SetColWidth(name, colName, colName, c.Width)
+	}
+
+	for i, row := range rows {
+		r := headerRow + 1 + i
+		jenis := "Pemasukan"
+		if row.EntryType == "expense" {
+			jenis = "Pengeluaran"
+		}
+		_ = f.SetCellValue(name, cell(1, r), row.EntryDate)
+		_ = f.SetCellValue(name, cell(2, r), jenis)
+		_ = f.SetCellValue(name, cell(3, r), row.Category)
+		_ = f.SetCellValue(name, cell(4, r), row.Notes)
+		_ = f.SetCellValue(name, cell(5, r), row.Amount)
 	}
 
 	if len(rows) >= maxHistoryRows {
