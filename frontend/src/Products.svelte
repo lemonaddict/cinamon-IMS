@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { Plus, Pencil, Save, X, Trash2, Search, Package, Tag, Banknote, Inbox } from 'lucide-svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { Plus, Pencil, Save, X, Trash2, Search, Package, Tag, Banknote, Inbox, HelpCircle } from 'lucide-svelte';
   import { api, msg, idr } from './api';
   import { cached } from './offline';
   import Select from './Select.svelte';
+  import Pagination from './Pagination.svelte';
+  import { startPageTour, shouldAutoTour } from './tour';
 
   type Cat = { id: number; name: string };
   type Product = { id: number; name: string; sku: string; cost_price: number; selling_price: number; description: string; category_id: number | null };
@@ -12,6 +15,8 @@
   let f = blank();
   let editingId: number | null = null;
   let q = '';
+  let page = 1;
+  const perPage = 10;
   let error = '';
 
   async function load() {
@@ -60,10 +65,59 @@
   const catName = (id: number | null) => cats.find((c) => c.id === id)?.name ?? '—';
   $: catOptions = [{ value: null, label: 'Pilih kategori' }, ...cats.map((c) => ({ value: c.id, label: c.name }))];
   $: shown = products.filter((p) => (p.name + p.sku).toLowerCase().includes(q.toLowerCase()));
+  $: if (q !== undefined) page = 1;
+  $: paged = shown.slice((page - 1) * perPage, page * perPage);
   load().catch((e) => (error = msg(e)));
+
+  let activeTour: ReturnType<typeof startPageTour> | null = null;
+  function startTour() {
+    activeTour?.destroy();
+    activeTour = startPageTour('tour_products_done', [
+      {
+        element: '[data-tour="prod-form"]',
+        popover: {
+          title: 'Tambah & Edit Produk',
+          description: 'Isi nama produk, SKU, harga beli, harga jual, kategori, dan deskripsi lalu klik Simpan produk.',
+          side: 'bottom',
+          align: 'start',
+        },
+      },
+      {
+        element: '[data-tour="prod-search"]',
+        popover: {
+          title: 'Cari Produk',
+          description: 'Ketik nama produk atau SKU di sini untuk menyaring daftar produk dengan cepat.',
+          side: 'bottom',
+          align: 'start',
+        },
+      },
+      {
+        element: '[data-tour="prod-table"]',
+        popover: {
+          title: 'Daftar Produk',
+          description: 'Lihat harga beli, harga jual, kategori, serta gunakan tombol Edit atau Hapus pada setiap baris produk.',
+          side: 'top',
+          align: 'start',
+        },
+      },
+    ]);
+  }
+
+  onMount(() => {
+    if (shouldAutoTour('tour_products_done')) {
+      setTimeout(startTour, 300);
+    }
+  });
+  onDestroy(() => activeTour?.destroy());
 </script>
 
-<div class="card">
+<div class="row" style="justify-content: flex-end; margin: 0 0 12px;">
+  <button type="button" class="btn ghost sm" on:click={startTour}>
+    <HelpCircle size={16} /> Panduan Produk
+  </button>
+</div>
+
+<div class="card" data-tour="prod-form">
   <h3>{#if editingId !== null}<Pencil size={18} /> Edit produk{:else}<Plus size={18} /> Tambah produk{/if}</h3>
   <form on:submit|preventDefault={save}>
     <label class="field"><Package size={18} /><input placeholder="Nama produk" bind:value={f.name} required /></label>
@@ -81,12 +135,12 @@
 </div>
 
 <div class="card">
-  <label class="field" style="margin-bottom: 12px;"><Search size={18} /><input placeholder="Cari nama atau SKU" bind:value={q} /></label>
-  <div class="wrap">
+  <label class="field" data-tour="prod-search" style="margin-bottom: 12px;"><Search size={18} /><input placeholder="Cari nama atau SKU" bind:value={q} /></label>
+  <div class="wrap" data-tour="prod-table">
     <table>
       <thead><tr><th>Produk</th><th>SKU</th><th>Harga Beli</th><th>Harga Jual</th><th>Kategori</th><th></th></tr></thead>
       <tbody>
-        {#each shown as p (p.id)}
+        {#each paged as p (p.id)}
           <tr>
             <td><span class="cell"><span class="avatar">{p.name.charAt(0).toUpperCase()}</span>{p.name}</span></td>
             <td>{p.sku}</td>
@@ -106,4 +160,5 @@
       </tbody>
     </table>
   </div>
+  <Pagination bind:page total={shown.length} {perPage} />
 </div>

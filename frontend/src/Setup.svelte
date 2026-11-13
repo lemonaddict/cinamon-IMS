@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { Tags, MapPin, Plus, Trash2, Inbox, Sun, Moon, Monitor } from 'lucide-svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { Tags, MapPin, Plus, Trash2, Inbox, Sun, Moon, Monitor, HelpCircle } from 'lucide-svelte';
   import { api, msg } from './api';
   import { cached } from './offline';
+  import { startPageTour, shouldAutoTour } from './tour';
 
   type Theme = 'light' | 'dark' | 'system';
   const themes: { v: Theme; label: string; icon: any }[] = [
@@ -43,10 +45,56 @@
   const add = (k: string) => run(async () => { await api(`/${k}`, 'POST', { name: names[k] }); names[k] = ''; });
   const del = (k: string, r: Row) => confirm(`Hapus "${r.name}"?`) && run(() => api(`/${k}/${r.id}`, 'DELETE'));
   load().catch((e) => (error = msg(e)));
+
+  let activeTour: ReturnType<typeof startPageTour> | null = null;
+  function startTour() {
+    activeTour?.destroy();
+    activeTour = startPageTour('tour_setup_done', [
+      {
+        element: '[data-tour="setup-theme"]',
+        popover: {
+          title: 'Tampilan Aplikasi',
+          description: 'Pilih Mode Terang, Mode Gelap, atau Ikuti Sistem sesuai kenyamanan Anda.',
+          side: 'bottom',
+          align: 'start',
+        },
+      },
+      {
+        element: '[data-tour="setup-categories"]',
+        popover: {
+          title: 'Kategori Produk',
+          description: 'Tambahkan atau kelola kategori untuk mengelompokkan produk Anda.',
+          side: 'top',
+          align: 'start',
+        },
+      },
+      {
+        element: '[data-tour="setup-locations"]',
+        popover: {
+          title: 'Lokasi Penyimpanan',
+          description: 'Tambahkan gudang, toko, atau rak penyimpanan sebelum mencatat pergerakan stok.',
+          side: 'top',
+          align: 'start',
+        },
+      },
+    ]);
+  }
+
+  onMount(() => {
+    if (shouldAutoTour('tour_setup_done')) {
+      setTimeout(startTour, 300);
+    }
+  });
+  onDestroy(() => activeTour?.destroy());
 </script>
 
 {#if error}<p class="err" role="alert">{error}</p>{/if}
-<div class="card">
+<div class="row" style="justify-content: flex-end; margin: 0 0 12px;">
+  <button type="button" class="btn ghost sm" on:click={startTour}>
+    <HelpCircle size={16} /> Panduan Pengaturan
+  </button>
+</div>
+<div class="card" data-tour="setup-theme">
   <h3><Sun size={18} /> Tampilan</h3>
   <div class="seg one-row" role="radiogroup" aria-label="Pilih tema tampilan" style="margin-bottom: 0;">
     {#each themes as t}
@@ -58,7 +106,7 @@
 </div>
 <div class="cols">
   {#each kinds as kind}
-    <div class="card">
+    <div class="card" data-tour={'setup-' + kind.k}>
       <h3><svelte:component this={kind.icon} size={18} /> {kind.title}</h3>
       <form on:submit|preventDefault={() => add(kind.k)}>
         <label class="field"><input placeholder="Nama" bind:value={names[kind.k]} required /></label>

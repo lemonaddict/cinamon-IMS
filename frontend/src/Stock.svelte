@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { ArrowDownToLine, ArrowUpFromLine, SlidersHorizontal, ClipboardCheck, ArrowLeftRight, Package, MapPin, Banknote, Plus, Trash2, Save, Inbox, CloudOff, CheckCircle2 } from 'lucide-svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { ArrowDownToLine, ArrowUpFromLine, SlidersHorizontal, ClipboardCheck, ArrowLeftRight, Package, MapPin, Banknote, Plus, Trash2, Save, Inbox, CloudOff, CheckCircle2, HelpCircle } from 'lucide-svelte';
   import { msg, idr } from './api';
   import { cached, submit } from './offline';
   import Select from './Select.svelte';
+  import Pagination from './Pagination.svelte';
+  import { startPageTour, shouldAutoTour } from './tour';
 
   type Opt = { id: number; name: string; sku?: string; cost_price?: number; selling_price?: number };
   type Bal = { sku: string; product: string; location: string; quantity: number };
@@ -20,7 +23,13 @@
   let rows: Row[] = [{ product_id: 0, location_id: 0, quantity: 1, direction: 'in' }];
   let opLoc = 0;
   let counts: Record<number, string> = {};
+  let balPage = 1;
+  const perPage = 10;
+  let opPage = 1;
+  const opPerPage = 5;
   let info = '', error = '', queued = false;
+  $: pagedBalances = balances.slice((balPage - 1) * perPage, balPage * perPage);
+  $: pagedOpProducts = products.slice((opPage - 1) * opPerPage, opPage * opPerPage);
   $: productOptions = products.map((p) => ({ value: p.id, label: `${p.name} (${p.sku})` }));
   $: locationOptions = locations.map((l) => ({ value: l.id, label: l.name }));
   const dirOptions = [{ value: 'in', label: 'Tambah' }, { value: 'out', label: 'Kurangi' }];
@@ -80,7 +89,57 @@
     return r;
   }, 'Hasil hitung stok tersimpan.');
   load().catch((e) => (error = msg(e)));
+
+  let activeTour: ReturnType<typeof startPageTour> | null = null;
+  function startTour() {
+    activeTour?.destroy();
+    const candidates = [
+      {
+        element: '[data-tour="stock-movement"]',
+        popover: {
+          title: 'Catat Pergerakan Stok',
+          description: 'Pilih Stok masuk, Stok keluar, atau Penyesuaian. Klik Tambah baris untuk mencatat banyak produk sekaligus (bulk); harga otomatis terisi dari data produk.',
+          side: 'bottom' as const,
+          align: 'start' as const,
+        },
+      },
+      {
+        element: '[data-tour="stock-opname"]',
+        popover: {
+          title: 'Hitung Stok (Opname)',
+          description: 'Pilih lokasi lalu isi jumlah fisik produk untuk menyesuaikan stok dengan hasil penghitungan di gudang.',
+          side: 'top' as const,
+          align: 'start' as const,
+        },
+      },
+      {
+        element: '[data-tour="stock-balances"]',
+        popover: {
+          title: 'Stok Saat Ini',
+          description: 'Lihat jumlah stok terkini untuk setiap produk di masing-masing lokasi penyimpanan.',
+          side: 'top' as const,
+          align: 'start' as const,
+        },
+      },
+    ];
+    const steps = candidates.filter((s) => document.querySelector(s.element));
+    if (!steps.length) return;
+    activeTour = startPageTour('tour_stock_done', steps);
+  }
+
+  onMount(() => {
+    if (shouldAutoTour('tour_stock_done')) {
+      setTimeout(startTour, 300);
+    }
+  });
+  onDestroy(() => activeTour?.destroy());
 </script>
+
+<div class="row" style="justify-content: flex-end; margin: 0 0 12px;">
+  <button type="button" class="btn ghost sm" on:click={startTour}>
+    <HelpCircle size={16} /> Panduan Stok
+  </button>
+</div>
 
 {#if info}<div class="note" class:ok={!queued}>{#if queued}<CloudOff size={18} />{:else}<CheckCircle2 size={18} />{/if} {info}</div>{/if}
 {#if error}<p class="err" role="alert">{error}</p>{/if}
@@ -88,7 +147,7 @@
 {#if products.length === 0 || locations.length === 0}
   <div class="card empty"><Inbox size={32} />Tambahkan minimal satu produk dan satu lokasi sebelum mencatat stok.</div>
 {:else}
-  <div class="card">
+  <div class="card" data-tour="stock-movement">
     <h3><ArrowLeftRight size={18} /> Catat pergerakan stok</h3>
     <div class="seg one-row">
       {#each types as t}<button type="button" class:on={moveType === t.v} on:click={() => (moveType = t.v)}><svelte:component this={t.icon} size={16} />{t.label}</button>{/each}
@@ -126,33 +185,39 @@
     </div>
   </div>
 
-  <div class="card wrap">
+  <div class="card" data-tour="stock-opname">
     <h3><ClipboardCheck size={18} /> Hitung stok di lokasi</h3>
-    <form on:submit|preventDefault={opname}>
+    <form on:submit|preventDefault={opname} style="margin-bottom: 10px;">
       <Select bind:value={opLoc} label="Lokasi hitung" placeholder="Pilih lokasi" searchable icon={MapPin} options={locationOptions} />
       <button class="btn"><Save size={18} /> Simpan hasil hitung</button>
     </form>
+    <div class="wrap">
+      <table>
+        <thead><tr><th>Produk</th><th>Jumlah fisik (kosongkan untuk dilewati)</th></tr></thead>
+        <tbody>
+          {#each pagedOpProducts as p (p.id)}
+            <tr><td>{p.name} ({p.sku})</td><td><label class="field"><input inputmode="numeric" pattern="[0-9]*" aria-label="Jumlah fisik {p.name}" bind:value={counts[p.id]} /></label></td></tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+    <Pagination bind:page={opPage} total={products.length} perPage={opPerPage} />
+  </div>
+{/if}
+
+<div class="card" data-tour="stock-balances">
+  <h3><Package size={18} /> Stok saat ini</h3>
+  <div class="wrap">
     <table>
-      <thead><tr><th>Produk</th><th>Jumlah fisik (kosongkan untuk dilewati)</th></tr></thead>
+      <thead><tr><th>Produk</th><th>SKU</th><th>Lokasi</th><th>Jumlah</th></tr></thead>
       <tbody>
-        {#each products as p}
-          <tr><td>{p.name} ({p.sku})</td><td><label class="field"><input inputmode="numeric" pattern="[0-9]*" aria-label="Jumlah fisik {p.name}" bind:value={counts[p.id]} /></label></td></tr>
+        {#each pagedBalances as b}
+          <tr><td>{b.product}</td><td>{b.sku}</td><td>{b.location}</td><td><b>{b.quantity}</b></td></tr>
+        {:else}
+          <tr><td colspan="4"><div class="empty"><Inbox size={30} />Belum ada stok tercatat.</div></td></tr>
         {/each}
       </tbody>
     </table>
   </div>
-{/if}
-
-<div class="card wrap">
-  <h3><Package size={18} /> Stok saat ini</h3>
-  <table>
-    <thead><tr><th>Produk</th><th>SKU</th><th>Lokasi</th><th>Jumlah</th></tr></thead>
-    <tbody>
-      {#each balances as b}
-        <tr><td>{b.product}</td><td>{b.sku}</td><td>{b.location}</td><td><b>{b.quantity}</b></td></tr>
-      {:else}
-        <tr><td colspan="4"><div class="empty"><Inbox size={30} />Belum ada stok tercatat.</div></td></tr>
-      {/each}
-    </tbody>
-  </table>
+  <Pagination bind:page={balPage} total={balances.length} {perPage} />
 </div>
