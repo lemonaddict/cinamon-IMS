@@ -27,6 +27,10 @@ const ID: Record<string, string> = {
   'quantity must be a positive integer': 'Jumlah harus bilangan bulat lebih dari 0.',
   'invalid JSON body': 'Data yang dikirim tidak valid.',
   'internal error': 'Terjadi gangguan di server. Coba lagi.',
+  'from must be YYYY-MM-DD': 'Tanggal mulai harus format YYYY-MM-DD.',
+  'to must be YYYY-MM-DD': 'Tanggal akhir harus format YYYY-MM-DD.',
+  'from must be before to': 'Tanggal mulai harus sebelum tanggal akhir.',
+  'range must not exceed 366 days': 'Rentang periode maksimal 366 hari.',
 };
 
 export const msg = (e: unknown): string =>
@@ -54,4 +58,48 @@ export async function api<T = any>(path: string, method = 'GET', body?: unknown)
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(ID[data.error] ?? data.error ?? res.statusText, res.status);
   return data as T;
+}
+
+/** Download binary (xlsx). Jangan lewat api() karena itu selalu parse JSON. */
+export async function downloadExport(
+  path: string,
+  filename: string,
+  query?: Record<string, string>,
+): Promise<void> {
+  if (!navigator.onLine) throw new TypeError('offline');
+
+  const qs = query
+    ? '?' + new URLSearchParams(Object.entries(query).filter(([, v]) => v)).toString()
+    : '';
+
+  let res: Response;
+  try {
+    res = await fetch(BASE + '/api' + path + qs, {
+      credentials: BASE ? 'include' : 'same-origin',
+    });
+  } catch (e) {
+    onReach(false);
+    throw e;
+  }
+  onReach(true);
+
+  if (res.status === 401) {
+    location.reload();
+    return;
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(ID[data.error] ?? data.error ?? res.statusText, res.status);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
