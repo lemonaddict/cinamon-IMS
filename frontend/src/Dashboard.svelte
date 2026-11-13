@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
+  import { driver } from 'driver.js';
   import {
     Package, MapPin, Boxes, CloudUpload, ArrowDownToLine, ArrowUpFromLine,
-    SlidersHorizontal, ArrowLeftRight, Inbox, FileSpreadsheet, Download,
+    SlidersHorizontal, ArrowLeftRight, Inbox, FileSpreadsheet, Download, HelpCircle,
   } from 'lucide-svelte';
   import { msg, downloadExport } from './api';
   import { cached, pending } from './offline';
@@ -75,11 +77,76 @@
       exporting = false;
     }
   }
+
+  let activeTour: ReturnType<typeof driver> | null = null;
+  function startTour() {
+    activeTour?.destroy();
+    activeTour = driver({
+      showProgress: true,
+      nextBtnText: 'Lanjut',
+      prevBtnText: 'Kembali',
+      doneBtnText: 'Selesai',
+      progressText: '{{current}} dari {{total}}',
+      onDestroyed: () => localStorage.setItem('tour_dashboard_done', '1'),
+      steps: [
+        {
+          element: '[data-tour="dash-stats"]',
+          popover: {
+            title: 'Ringkasan Inventori',
+            description: 'Pantau jumlah produk, lokasi penyimpanan, total unit stok, dan antrean data yang menunggu sinkronisasi.',
+            side: 'bottom',
+            align: 'start',
+          },
+        },
+        {
+          element: '[data-tour="dash-export"]',
+          popover: {
+            title: 'Export Laporan Excel',
+            description: 'Pilih rentang tanggal lalu klik Unduh Excel untuk mengunduh laporan lengkap (Ringkasan Stok, Riwayat, dan Keuangan).',
+            side: 'bottom',
+            align: 'start',
+          },
+        },
+        {
+          element: '[data-tour="dash-locations"]',
+          popover: {
+            title: 'Stok per Lokasi',
+            description: 'Lihat distribusi jumlah stok di setiap gudang atau lokasi penyimpanan.',
+            side: 'top',
+            align: 'start',
+          },
+        },
+        {
+          element: '[data-tour="dash-activity"]',
+          popover: {
+            title: 'Aktivitas Terbaru',
+            description: 'Menampilkan 5 pergerakan stok masuk, keluar, atau penyesuaian terakhir.',
+            side: 'top',
+            align: 'start',
+          },
+        },
+      ],
+    });
+    activeTour.drive();
+  }
+
+  onMount(() => {
+    if (!localStorage.getItem('tour_dashboard_done')) {
+      setTimeout(startTour, 300);
+    }
+  });
+  onDestroy(() => activeTour?.destroy());
 </script>
 
 {#if error}<p class="err">{error}</p>{/if}
 
-<div class="stats">
+<div class="row" style="justify-content: flex-end; margin: 0 0 12px;">
+  <button type="button" class="btn ghost sm" on:click={startTour}>
+    <HelpCircle size={16} /> Panduan Beranda
+  </button>
+</div>
+
+<div class="stats" data-tour="dash-stats">
   <div class="stat g1"><span class="ico"><Package size={22} /></span><b>{stats.products}</b>Produk</div>
   <div class="stat g2"><span class="ico"><MapPin size={22} /></span><b>{stats.locations}</b>Lokasi penyimpanan</div>
   <div class="stat g3"><span class="ico"><Boxes size={22} /></span><b>{stats.total_units}</b>Total unit stok</div>
@@ -87,10 +154,10 @@
 </div>
 
 <!-- Export Excel -->
-<div class="card">
+<div class="card" data-tour="dash-export">
   <h3><FileSpreadsheet size={18} /> Export data ke Excel</h3>
   <p class="muted" style="margin:0 0 12px">
-    Sheet 1: ringkasan stok saat ini. Sheet 2: riwayat keluar/masuk sesuai periode.
+    Sheet 1: ringkasan stok saat ini. Sheet 2: riwayat keluar/masuk. Sheet 3: catatan keuangan sesuai periode.
   </p>
   <form on:submit|preventDefault={doExport}>
     <label class="field">
@@ -111,7 +178,7 @@
 </div>
 
 <div class="cols">
-  <div class="card">
+  <div class="card" data-tour="dash-locations">
     <h3><MapPin size={18} /> Stok per lokasi</h3>
     {#each perLocation as [name, qty]}
       <div class="row"><span>{name}</span><b>{qty}</b></div>
@@ -120,7 +187,7 @@
       <div class="empty"><Inbox size={30} />Belum ada stok. Catat stok masuk pertama Anda di menu Stok.</div>
     {/each}
   </div>
-  <div class="card">
+  <div class="card" data-tour="dash-activity">
     <h3><ArrowLeftRight size={18} /> Aktivitas terbaru</h3>
     {#each moves as m}
       <div class="row">

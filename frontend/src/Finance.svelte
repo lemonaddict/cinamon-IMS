@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { Wallet, ArrowDownToLine, ArrowUpFromLine, Plus, Trash2, Search, Calendar, Tag, Banknote, Inbox } from 'lucide-svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { Wallet, ArrowDownToLine, ArrowUpFromLine, Plus, Trash2, Search, Calendar, Tag, Banknote, Inbox, HelpCircle } from 'lucide-svelte';
   import { api, msg, idr } from './api';
   import { cached } from './offline';
   import Select from './Select.svelte';
+  import Pagination from './Pagination.svelte';
+  import { startPageTour, shouldAutoTour } from './tour';
 
   type Entry = {
     id: number;
@@ -34,6 +37,8 @@
   let f = blank();
   let filterType: '' | 'income' | 'expense' = '';
   let q = '';
+  let page = 1;
+  const perPage = 10;
   let error = '';
 
   async function load() {
@@ -89,11 +94,60 @@
     const term = q.toLowerCase();
     return (e.category + ' ' + e.notes + ' ' + e.entry_date).toLowerCase().includes(term);
   });
+  $: if (filterType !== undefined || q !== undefined) page = 1;
+  $: paged = shown.slice((page - 1) * perPage, page * perPage);
 
   load().catch((e) => (error = msg(e)));
+
+  let activeTour: ReturnType<typeof startPageTour> | null = null;
+  function startTour() {
+    activeTour?.destroy();
+    activeTour = startPageTour('tour_finance_done', [
+      {
+        element: '[data-tour="fin-stats"]',
+        popover: {
+          title: 'Ringkasan Keuangan',
+          description: 'Pantau total pemasukan, total pengeluaran, dan saldo bersih secara otomatis.',
+          side: 'bottom',
+          align: 'start',
+        },
+      },
+      {
+        element: '[data-tour="fin-form"]',
+        popover: {
+          title: 'Catat Transaksi Keuangan',
+          description: 'Pilih Pemasukan atau Pengeluaran, tentukan tanggal, pilih atau tulis kategori, isi nominal, lalu simpan.',
+          side: 'bottom',
+          align: 'start',
+        },
+      },
+      {
+        element: '[data-tour="fin-table"]',
+        popover: {
+          title: 'Daftar Catatan Keuangan',
+          description: 'Filter berdasarkan jenis transaksi atau cari catatan. Stok masuk dan keluar juga tercatat otomatis di sini.',
+          side: 'top',
+          align: 'start',
+        },
+      },
+    ]);
+  }
+
+  onMount(() => {
+    if (shouldAutoTour('tour_finance_done')) {
+      setTimeout(startTour, 300);
+    }
+  });
+  onDestroy(() => activeTour?.destroy());
 </script>
 
-<div class="stats">
+<div class="row" style="justify-content: flex-end; margin: 0 0 12px;">
+  <button type="button" class="btn ghost sm" on:click={startTour}>
+    <HelpCircle size={16} /> Panduan Keuangan
+  </button>
+</div>
+
+<div class="stats" data-tour="fin-stats">
   <div class="stat g2">
     <span class="ico"><ArrowDownToLine size={22} /></span>
     <b>{idr(summary.total_income)}</b>Total Pemasukan
@@ -108,7 +162,7 @@
   </div>
 </div>
 
-<div class="card">
+<div class="card" data-tour="fin-form">
   <h3><Plus size={18} /> Catat transaksi keuangan</h3>
   <div class="seg one-row" role="tablist" aria-label="Jenis transaksi">
     <button type="button" class:on={f.entry_type === 'income'} on:click={() => switchType('income')}>
@@ -129,7 +183,7 @@
   {#if error}<p class="err" role="alert">{error}</p>{/if}
 </div>
 
-<div class="card">
+<div class="card" data-tour="fin-table">
   <div class="row" style="margin: 0 0 12px; flex-wrap: wrap;">
     <div class="seg one-row" style="margin: 0; flex: 1 1 280px;">
       <button type="button" class:on={filterType === ''} on:click={() => (filterType = '')}>Semua</button>
@@ -143,7 +197,7 @@
     <table>
       <thead><tr><th>Tanggal</th><th>Jenis</th><th>Kategori</th><th>Keterangan</th><th>Nominal</th><th></th></tr></thead>
       <tbody>
-        {#each shown as e (e.id)}
+        {#each paged as e (e.id)}
           <tr>
             <td>{new Date(e.entry_date + 'T00:00:00').toLocaleDateString('id-ID')}</td>
             <td>
@@ -164,5 +218,6 @@
       </tbody>
     </table>
   </div>
+  <Pagination bind:page total={shown.length} {perPage} />
 </div>
 
