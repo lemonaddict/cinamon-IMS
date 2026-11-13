@@ -49,7 +49,7 @@
 {:else}
   <div class="shell">
     <aside class="side">
-      <div class="brand"><Boxes size={26} /> Inventori</div>
+      <div class="brand"><Boxes size={26} /> CINAMON</div>
       <nav>
         {#each tabs as t}
           <button class:on={tab === t.id} class:sec={t.sec} aria-current={tab === t.id ? 'page' : undefined} on:click={() => (tab = t.id)}>

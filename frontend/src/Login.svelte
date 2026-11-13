@@ -23,7 +23,7 @@
 
 <div class="auth">
   <section class="hero">
-    <div class="brand"><Boxes size={28} /> Inventori</div>
+    <div class="brand"><Boxes size={28} /> CINAMON - Cellix Inventory & Assets Management Online</div>
     <h1>Stok usaha Anda, rapi di mana saja.</h1>
     <ul>
       <li><TrendingUp size={20} /> Pantau stok per lokasi secara langsung</li>
