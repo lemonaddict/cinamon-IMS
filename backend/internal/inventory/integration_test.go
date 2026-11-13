@@ -135,3 +135,24 @@ func TestOpnameRecordsOnlyTheDifference(t *testing.T) {
 		t.Fatalf("a matching count must change nothing: changes=%d err=%v", changes, err)
 	}
 }
+
+func TestOpnameKeepsMovementsMadeAfterTheCount(t *testing.T) {
+	s := testService(t)
+	uid, pid, lid := seed(t, s)
+	if _, _, err := move(s, uid, "in", "", pid, lid, 10); err != nil {
+		t.Fatal(err)
+	}
+	observed := time.Now()
+	time.Sleep(50 * time.Millisecond)
+	if _, _, err := move(s, uid, "out", "", pid, lid, 3); err != nil { // sold after the count was taken
+		t.Fatal(err)
+	}
+	in := OpnameIn{LocationID: lid, ObservedAt: &observed, Counts: []CountIn{{ProductID: pid, Counted: 8}}}
+	if _, changes, _, err := s.Opname(context.Background(), uid, in); err != nil || changes != 1 {
+		t.Fatalf("changes=%d err=%v", changes, err)
+	}
+	// counted 8 while the server said 10 (2 missing); the later sale of 3 must survive: 10-3-2 = 5
+	if q := qty(t, s, uid, pid, lid); q != 5 {
+		t.Fatalf("qty=%d, want 5", q)
+	}
+}

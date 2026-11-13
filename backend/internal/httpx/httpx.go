@@ -79,20 +79,26 @@ func Page(r *http.Request) (limit, offset int) {
 	return
 }
 
-// SameOrigin blocks cross-site state-changing requests (defence in depth on top of
-// SameSite cookies) and sets basic response headers.
-func SameOrigin(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Cache-Control", "no-store")
-		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
-			if o := r.Header.Get("Origin"); o != "" {
-				if u, err := url.Parse(o); err != nil || u.Host != r.Host {
-					Err(w, http.StatusForbidden, "cross-origin request blocked")
-					return
+// SameOrigin blocks state-changing requests whose Origin is neither this host nor an
+// allowed (CORS) origin, and sets basic response headers.
+func SameOrigin(allowed []string) func(http.Handler) http.Handler {
+	ok := map[string]bool{}
+	for _, a := range allowed {
+		ok[a] = true
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("Cache-Control", "no-store")
+			if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+				if o := r.Header.Get("Origin"); o != "" && !ok[o] {
+					if u, err := url.Parse(o); err != nil || u.Host != r.Host {
+						Err(w, http.StatusForbidden, "cross-origin request blocked")
+						return
+					}
 				}
 			}
-		}
-		next.ServeHTTP(w, r)
-	})
+			next.ServeHTTP(w, r)
+		})
+	}
 }

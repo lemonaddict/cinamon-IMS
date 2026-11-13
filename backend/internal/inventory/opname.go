@@ -5,12 +5,16 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"ims/internal/auth"
 	"ims/internal/httpx"
 )
+
+// ErrConflict means the offline count cannot be reconciled with newer stock movements.
+var ErrConflict = errors.New("count conflicts with newer stock movements")
 
 type CountIn struct {
 	ProductID int64 `json:"product_id"`
@@ -21,6 +25,7 @@ type OpnameIn struct {
 	LocationID     int64     `json:"location_id"`
 	Notes          string    `json:"notes"`
 	IdempotencyKey string    `json:"idempotency_key"`
+	ObservedAt     *time.Time `json:"observed_at"` // when an offline count was taken
 	Counts         []CountIn `json:"counts"`
 }
 
@@ -61,7 +66,22 @@ func (s *Service) Opname(ctx context.Context, uid int64, in OpnameIn) (id int64,
 			uid, c.ProductID, in.LocationID).Scan(&cur); err != nil {
 			return 0, 0, false, err
 		}
-		delta := c.Counted - cur
+		var since int64 // net stock change recorded after the count was taken
+		if in.ObservedAt != nil {
+			if err = tx.QueryRow(ctx,
+				`SELECT coalesce(sum(CASE WHEN i.direction = 'in' THEN i.quantity ELSE -i.quantity END), 0)::bigint
+				 FROM stock_movement_items i
+				 JOIN stock_movements m ON m.user_id = i.user_id AND m.id = i.stock_movement_id
+				 WHERE i.user_id = $1 AND i.product_id = $2 AND i.location_id = $3 AND m.created_at > $4 AND m.id <> $5`,
+				uid, c.ProductID, in.LocationID, *in.ObservedAt, id).Scan(&since); err != nil {
+				return 0, 0, false, err
+			}
+		}
+		target := c.Counted + since // what the shelf should hold now if the count was right when taken
+		if target < 0 {
+			return 0, 0, false, ErrConflict // never force stock negative: ask for a recount
+		}
+		delta := target - cur
 		if delta == 0 {
 			continue
 		}
@@ -77,7 +97,7 @@ func (s *Service) Opname(ctx context.Context, uid int64, in OpnameIn) (id int64,
 		if _, err = tx.Exec(ctx,
 			`UPDATE inventory_balances SET quantity = $4, updated_at = now()
 			 WHERE user_id = $1 AND product_id = $2 AND location_id = $3`,
-			uid, c.ProductID, in.LocationID, c.Counted); err != nil {
+			uid, c.ProductID, in.LocationID, target); err != nil {
 			return 0, 0, false, err
 		}
 		changes++
@@ -102,6 +122,8 @@ func (s *Service) postOpname(w http.ResponseWriter, r *http.Request) {
 	}
 	id, changes, replayed, err := s.Opname(r.Context(), auth.UserID(r.Context()), in)
 	switch {
+	case errors.Is(err, ErrConflict):
+		httpx.Err(w, http.StatusConflict, "stock changed since the count; please recount")
 	case err != nil:
 		httpx.DBError(w, err)
 	case replayed:

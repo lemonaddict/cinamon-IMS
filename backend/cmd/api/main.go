@@ -36,16 +36,15 @@ func main() {
 
 	authH := &auth.Handler{DB: pool, Secure: cfg.Env == "production", AllowRegistration: cfg.AllowRegistration}
 	router := chi.NewRouter()
-
-    router.Use(cors.Handler(cors.Options{
-        AllowedOrigins:   []string{"http://localhost:5173"}, 
-        AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-        AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-        ExposedHeaders:   []string{"Link"},
-        AllowCredentials: true,
-        MaxAge:           300,
-    }))
-	router.Use(middleware.Recoverer, middleware.Logger)
+	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   cfg.CorsOrigins,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
+	router.Use(middleware.Recoverer, middleware.Logger, httpx.SameOrigin(cfg.CorsOrigins))
 	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {
 			httpx.Err(w, http.StatusServiceUnavailable, "database unavailable")
