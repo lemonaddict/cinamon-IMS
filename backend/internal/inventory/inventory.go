@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -130,8 +132,45 @@ func (s *Service) Post(ctx context.Context, uid int64, m MovementIn) (id int64, 
 		if err != nil {
 			return 0, false, err
 		}
+		if m.Type == "in" || m.Type == "out" {
+			if err = recordFinance(ctx, tx, uid, m.Type, it.ProductID, it.Quantity, m.Notes); err != nil {
+				return 0, false, err
+			}
+		}
 	}
 	return id, false, tx.Commit(ctx)
+}
+
+// recordFinance logs stock-in (cost_price as expense) and stock-out (selling_price as income)
+// into finance_entries within the same transaction, skipping items with zero price.
+func recordFinance(ctx context.Context, tx pgx.Tx, uid int64, moveType string, productID, qty int64, userNotes string) error {
+	var name string
+	var costPrice, sellingPrice int64
+	if err := tx.QueryRow(ctx,
+		`SELECT name, cost_price, selling_price FROM products WHERE user_id = $1 AND id = $2`,
+		uid, productID).Scan(&name, &costPrice, &sellingPrice); err != nil {
+		return err
+	}
+	entryType, category, unitPrice := "expense", "Pembelian Stok", costPrice
+	if moveType == "out" {
+		entryType, category, unitPrice = "income", "Penjualan", sellingPrice
+	}
+	amount := unitPrice * qty
+	if amount <= 0 {
+		return nil
+	}
+	notes := fmt.Sprintf("%s × %d", name, qty)
+	if extra := strings.TrimSpace(userNotes); extra != "" {
+		notes += " — " + extra
+	}
+	if len(notes) > 500 {
+		notes = notes[:500]
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO finance_entries (user_id, entry_type, category, amount, entry_date, notes)
+		 VALUES ($1, $2, $3, $4, CURRENT_DATE, $5)`,
+		uid, entryType, category, amount, notes)
+	return err
 }
 
 func (s *Service) postMovement(w http.ResponseWriter, r *http.Request) {

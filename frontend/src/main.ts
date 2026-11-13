@@ -1,6 +1,11 @@
 import './app.css';
 import App from './App.svelte';
 
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'light' || savedTheme === 'dark') {
+  document.documentElement.dataset.theme = savedTheme;
+}
+
 new App({ target: document.getElementById('app')! });
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {

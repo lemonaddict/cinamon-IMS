@@ -1,7 +1,27 @@
 <script lang="ts">
-  import { Tags, MapPin, Plus, Trash2, Inbox } from 'lucide-svelte';
+  import { Tags, MapPin, Plus, Trash2, Inbox, Sun, Moon, Monitor } from 'lucide-svelte';
   import { api, msg } from './api';
   import { cached } from './offline';
+
+  type Theme = 'light' | 'dark' | 'system';
+  const themes: { v: Theme; label: string; icon: any }[] = [
+    { v: 'light', label: 'Mode Terang', icon: Sun },
+    { v: 'dark', label: 'Mode Gelap', icon: Moon },
+    { v: 'system', label: 'Ikuti Sistem', icon: Monitor },
+  ];
+  const saved = localStorage.getItem('theme');
+  let theme: Theme = saved === 'light' || saved === 'dark' ? saved : 'system';
+
+  function setTheme(t: Theme) {
+    theme = t;
+    if (t === 'system') {
+      localStorage.removeItem('theme');
+      delete document.documentElement.dataset.theme;
+    } else {
+      localStorage.setItem('theme', t);
+      document.documentElement.dataset.theme = t;
+    }
+  }
 
   type Row = { id: number; name: string };
   const kinds = [
@@ -26,6 +46,16 @@
 </script>
 
 {#if error}<p class="err" role="alert">{error}</p>{/if}
+<div class="card">
+  <h3><Sun size={18} /> Tampilan</h3>
+  <div class="seg one-row" role="radiogroup" aria-label="Pilih tema tampilan" style="margin-bottom: 0;">
+    {#each themes as t}
+      <button type="button" class:on={theme === t.v} on:click={() => setTheme(t.v)}>
+        <svelte:component this={t.icon} size={16} />{t.label}
+      </button>
+    {/each}
+  </div>
+</div>
 <div class="cols">
   {#each kinds as kind}
     <div class="card">
