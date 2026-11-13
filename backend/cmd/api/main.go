@@ -1,3 +1,4 @@
+//backend/cmd/api/main.go
 package main
 
 import (
@@ -19,6 +20,7 @@ import (
 	"ims/internal/finance"
 	"ims/internal/httpx"
 	"ims/internal/inventory"
+	"ims/internal/export"
 )
 
 func main() {
@@ -61,6 +63,7 @@ func main() {
 			(&catalog.Handler{DB: pool}).Routes(priv)
 			(&inventory.Service{DB: pool}).Routes(priv)
 			(&finance.Handler{DB: pool}).Routes(priv)
+			(&export.Handler{DB: pool}).Routes(priv)
 		})
 	})
 
