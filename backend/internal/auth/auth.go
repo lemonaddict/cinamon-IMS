@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/mail"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,22 +25,35 @@ import (
 const (
 	cookieName = "ims_session"
 	sessionTTL = 30 * 24 * time.Hour
+	RoleUser   = "user"
+	RoleAdmin  = "admin"
 )
 
 type ctxKey struct{}
+type roleKey struct{}
 
-// UserID returns the authenticated tenant ID. It is only ever set by Middleware
-// from the session; no request field can supply it.
+// UserID returns the authenticated tenant ID. Only Middleware sets it from the session.
 func UserID(ctx context.Context) int64 {
 	id, _ := ctx.Value(ctxKey{}).(int64)
 	return id
 }
 
+// Role returns the authenticated user's role ("user" or "admin").
+func Role(ctx context.Context) string {
+	r, _ := ctx.Value(roleKey{}).(string)
+	return r
+}
+
+// IsAdmin reports whether the current request is authenticated as an admin.
+func IsAdmin(ctx context.Context) bool {
+	return Role(ctx) == RoleAdmin
+}
+
 type Handler struct {
-	DB     *pgxpool.Pool
-	Secure bool // true in production (HTTPS-only cookie)
-	AllowRegistration bool
-	lim    limiter
+	DB                *pgxpool.Pool
+	Secure            bool // true in production (HTTPS-only cookie)
+	AllowRegistration bool // emergency only; prefer admin-created accounts
+	lim               limiter
 }
 
 func (h *Handler) Public(r chi.Router) {
@@ -61,6 +75,8 @@ type credentials struct {
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password"), 12)
 
 func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
+	// Self-registration is closed by default. Admins create accounts via /api/admin/users.
+	// ALLOW_REGISTRATION=true is an emergency escape hatch only.
 	if !h.AllowRegistration {
 		httpx.Err(w, http.StatusForbidden, "registration is closed")
 		return
@@ -86,7 +102,7 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 	}
 	var id int64
 	err = h.DB.QueryRow(r.Context(),
-		`INSERT INTO users (name, email, password_hash) VALUES ($1,$2,$3) RETURNING id`,
+		`INSERT INTO users (name, email, password_hash, role) VALUES ($1,$2,$3,'user') RETURNING id`,
 		in.Name, in.Email, string(hash)).Scan(&id)
 	if err != nil {
 		httpx.DBError(w, err)
@@ -96,7 +112,7 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 		httpx.Err(w, http.StatusInternalServerError, "could not start session")
 		return
 	}
-	httpx.JSON(w, http.StatusCreated, map[string]any{"id": id, "name": in.Name, "email": in.Email})
+	httpx.JSON(w, http.StatusCreated, map[string]any{"id": id, "name": in.Name, "email": in.Email, "role": RoleUser})
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
@@ -108,9 +124,9 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var id int64
-	var hash, status string
+	var hash, status, role string
 	err := h.DB.QueryRow(r.Context(),
-		`SELECT id, password_hash, status FROM users WHERE lower(email) = lower($1)`, in.Email).Scan(&id, &hash, &status)
+		`SELECT id, password_hash, status, role FROM users WHERE lower(email) = lower($1)`, in.Email).Scan(&id, &hash, &status, &role)
 	found := true
 	if errors.Is(err, pgx.ErrNoRows) {
 		found, hash = false, string(dummyHash) // constant-ish timing for unknown emails
@@ -130,7 +146,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		httpx.Err(w, http.StatusInternalServerError, "could not start session")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"id": id})
+	httpx.JSON(w, http.StatusOK, map[string]any{"id": id, "role": role})
 }
 
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
@@ -144,12 +160,12 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 	uid := UserID(r.Context())
-	var name, email string
-	if err := h.DB.QueryRow(r.Context(), `SELECT name, email FROM users WHERE id = $1`, uid).Scan(&name, &email); err != nil {
+	var name, email, role string
+	if err := h.DB.QueryRow(r.Context(), `SELECT name, email, role FROM users WHERE id = $1`, uid).Scan(&name, &email, &role); err != nil {
 		httpx.DBError(w, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"id": uid, "name": name, "email": email})
+	httpx.JSON(w, http.StatusOK, map[string]any{"id": uid, "name": name, "email": email, "role": role})
 }
 
 func (h *Handler) startSession(w http.ResponseWriter, r *http.Request, uid int64) error {
@@ -169,8 +185,8 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request, uid int64
 	return nil
 }
 
-// Middleware resolves the session cookie to a tenant ID. Suspended users lose
-// access immediately; their data is untouched.
+// Middleware resolves the session cookie to a tenant ID and role.
+// Suspended users lose access immediately; their data is untouched.
 func (h *Handler) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie(cookieName)
@@ -180,9 +196,10 @@ func (h *Handler) Middleware(next http.Handler) http.Handler {
 		}
 		sum := sha256.Sum256([]byte(c.Value))
 		var uid int64
+		var role string
 		err = h.DB.QueryRow(r.Context(),
-			`SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id
-			 WHERE s.token_hash = $1 AND s.expires_at > now() AND u.status = 'active'`, sum[:]).Scan(&uid)
+			`SELECT s.user_id, u.role FROM sessions s JOIN users u ON u.id = s.user_id
+			 WHERE s.token_hash = $1 AND s.expires_at > now() AND u.status = 'active'`, sum[:]).Scan(&uid, &role)
 		if errors.Is(err, pgx.ErrNoRows) {
 			httpx.Err(w, http.StatusUnauthorized, "authentication required")
 			return
@@ -190,19 +207,54 @@ func (h *Handler) Middleware(next http.Handler) http.Handler {
 			httpx.DBError(w, err)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, uid)))
+		// Best-effort RLS context. With a connection pool this is not sticky across
+		// queries; app-level user_id filters remain the primary isolation layer.
+		_, _ = h.DB.Exec(r.Context(), `SELECT set_config('app.current_user_id', $1, false)`, strconv.FormatInt(uid, 10))
+
+		ctx := context.WithValue(r.Context(), ctxKey{}, uid)
+		ctx = context.WithValue(ctx, roleKey{}, role)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// In-memory per-IP limiter: fine for one instance. Behind Caddy, key on the
-// forwarded client IP instead of RemoteAddr.
+// RequireAdmin rejects non-admin authenticated users.
+func RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !IsAdmin(r.Context()) {
+			httpx.Err(w, http.StatusForbidden, "admin access required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// ClientIP returns the client IP, preferring the first X-Forwarded-For hop when
+// the request is behind a trusted reverse proxy (Railway, Render, Fly, etc.).
+func ClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.IndexByte(xff, ','); i >= 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return ip
+}
+
+// In-memory per-IP limiter: fine for one instance.
 type limiter struct {
 	mu   sync.Mutex
 	hits map[string][]time.Time
 }
 
 func (h *Handler) throttle(w http.ResponseWriter, r *http.Request) bool {
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	ip := ClientIP(r)
 	l := &h.lim
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -223,4 +275,21 @@ func (h *Handler) throttle(w http.ResponseWriter, r *http.Request) bool {
 	}
 	l.hits[ip] = append(kept, now)
 	return true
+}
+
+// HashPassword is exported for admin create-user and bootstrap.
+func HashPassword(password string) (string, error) {
+	b, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	return string(b), err
+}
+
+// ValidateNewUser checks name, email, password for create flows.
+func ValidateNewUser(name, email, password string) error {
+	name = strings.TrimSpace(name)
+	email = strings.ToLower(strings.TrimSpace(email))
+	addr, err := mail.ParseAddress(email)
+	if err != nil || addr.Address != email || name == "" || len(password) < 10 || len(password) > 72 {
+		return errors.New("name, a valid email and a 10-72 character password are required")
+	}
+	return nil
 }

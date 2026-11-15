@@ -1,18 +1,16 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { Boxes, Mail, Lock, User, WifiOff, ShieldCheck, TrendingUp } from 'lucide-svelte';
+  import { Boxes, Mail, Lock, WifiOff, ShieldCheck, TrendingUp } from 'lucide-svelte';
   import { api, msg } from './api';
 
   const dispatch = createEventDispatcher();
-  let mode: 'login' | 'register' = 'login';
-  let name = '', email = '', password = '', error = '', busy = false;
+  let email = '', password = '', error = '', busy = false;
 
   async function submit() {
     error = '';
     busy = true;
     try {
-      await api(mode === 'login' ? '/auth/login' : '/auth/register', 'POST',
-        mode === 'login' ? { email, password } : { name, email, password });
+      await api('/auth/login', 'POST', { email, password });
       dispatch('done', await api('/me'));
     } catch (e) {
       error = msg(e);
@@ -33,17 +31,12 @@
   </section>
   <section class="formside">
     <form class="card" on:submit|preventDefault={submit}>
-      <h2>{mode === 'login' ? 'Masuk ke akun' : 'Buat akun baru'}</h2>
-      {#if mode === 'register'}
-        <label class="field"><User size={18} /><input placeholder="Nama lengkap" autocomplete="name" bind:value={name} required /></label>
-      {/if}
+      <h2>Masuk ke akun</h2>
       <label class="field"><Mail size={18} /><input type="email" placeholder="Email" autocomplete="email" bind:value={email} required /></label>
-      <label class="field"><Lock size={18} /><input type="password" placeholder="Kata sandi (minimal 10 karakter)" autocomplete={mode === 'login' ? 'current-password' : 'new-password'} bind:value={password} required minlength="10" /></label>
+      <label class="field"><Lock size={18} /><input type="password" placeholder="Kata sandi" autocomplete="current-password" bind:value={password} required minlength="10" /></label>
       {#if error}<p class="err" role="alert">{error}</p>{/if}
-      <button class="btn" disabled={busy}>{mode === 'login' ? 'Masuk' : 'Buat akun'}</button>
-      <button type="button" class="btn ghost" on:click={() => { mode = mode === 'login' ? 'register' : 'login'; error = ''; }}>
-        {mode === 'login' ? 'Belum punya akun? Daftar' : 'Sudah punya akun? Masuk'}
-      </button>
+      <button class="btn" disabled={busy}>Masuk</button>
+      <p class="muted" style="margin-top:0.75rem;font-size:0.85rem;text-align:center">Akun dibuat oleh administrator. Hubungi admin jika belum punya akses.</p>
     </form>
   </section>
 </div>

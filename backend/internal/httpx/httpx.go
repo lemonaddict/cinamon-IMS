@@ -79,6 +79,20 @@ func Page(r *http.Request) (limit, offset int) {
 	return
 }
 
+// SecurityHeaders sets baseline response headers for all responses.
+func SecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Cache-Control", "no-store")
+		// CSP is intentionally modest: API returns JSON only; frontend is served separately.
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // SameOrigin blocks state-changing requests whose Origin is neither this host nor an
 // allowed (CORS) origin, and sets basic response headers.
 func SameOrigin(allowed []string) func(http.Handler) http.Handler {
@@ -88,8 +102,6 @@ func SameOrigin(allowed []string) func(http.Handler) http.Handler {
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-			w.Header().Set("Cache-Control", "no-store")
 			if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
 				if o := r.Header.Get("Origin"); o != "" && !ok[o] {
 					if u, err := url.Parse(o); err != nil || u.Host != r.Host {

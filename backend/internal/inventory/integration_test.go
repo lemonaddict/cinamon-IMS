@@ -43,7 +43,7 @@ func seed(t *testing.T, s *Service) (uid, pid, lid int64) {
 	t.Helper()
 	ctx := context.Background()
 	tag := fmt.Sprintf("%d-%d", time.Now().UnixNano(), seq.Add(1))
-	must(t, s.DB.QueryRow(ctx, `INSERT INTO users (name,email,password_hash) VALUES ('t',$1,'x') RETURNING id`, tag+"@test.local").Scan(&uid))
+	must(t, s.DB.QueryRow(ctx, `INSERT INTO users (name,email,password_hash,role) VALUES ('t',$1,'x','user') RETURNING id`, tag+"@test.local").Scan(&uid))
 	must(t, s.DB.QueryRow(ctx, `INSERT INTO products (user_id,name,sku) VALUES ($1,'p',$2) RETURNING id`, uid, tag).Scan(&pid))
 	must(t, s.DB.QueryRow(ctx, `INSERT INTO locations (user_id,name) VALUES ($1,'l') RETURNING id`, uid).Scan(&lid))
 	return

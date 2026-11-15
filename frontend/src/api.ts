@@ -37,7 +37,12 @@ const ID: Record<string, string> = {
   'to must be YYYY-MM-DD': 'Tanggal akhir harus format YYYY-MM-DD.',
   'from must be before to': 'Tanggal mulai harus sebelum tanggal akhir.',
   'range must not exceed 366 days': 'Rentang periode maksimal 366 hari.',
-};
+  'admin access required': 'Hanya administrator yang dapat mengakses fitur ini.',
+  'cannot change your own status': 'Anda tidak dapat mengubah status akun sendiri.',
+  'cannot change your own role': 'Anda tidak dapat mengubah peran akun sendiri.',
+  'status must be active or suspended': 'Status harus active atau suspended.',
+  'role must be user or admin': 'Peran harus user atau admin.',
+  'password must be 10-72 characters': 'Kata sandi harus 10–72 karakter.',};
 
 export const msg = (e: unknown): string =>
   e instanceof ApiError ? e.message : e instanceof TypeError ? 'Tidak ada koneksi internet.' : (e as Error).message;

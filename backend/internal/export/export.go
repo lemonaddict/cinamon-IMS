@@ -69,54 +69,69 @@ func (h *Handler) inventory(w http.ResponseWriter, r *http.Request) {
 	uid := auth.UserID(r.Context())
 	from, to, err := parseRange(r)
 	if err != nil {
-		httpx.Err(w, http.StatusUnprocessableEntity, err.Error())
-		return
+	    httpx.Err(w, http.StatusUnprocessableEntity, err.Error())
+	    return
 	}
 
 	balances, err := h.loadBalances(r, uid)
 	if err != nil {
-		httpx.DBError(w, err)
-		return
+    	httpx.DBError(w, err)
+    	return
 	}
-	history, err := h.loadHistory(r, uid, from, to)
-	if err != nil {
-		httpx.DBError(w, err)
-		return
-	}
-	finRows, err := h.loadFinance(r, uid, from, to)
-	if err != nil {
-		httpx.DBError(w, err)
-		return
-	}
+    history, err := h.loadHistory(r, uid, from, to)
+    if err != nil {
+        httpx.DBError(w, err)
+        return
+    }
+    finRows, err := h.loadFinance(r, uid, from, to)
+    if err != nil {
+        httpx.DBError(w, err)
+        return
+    }
 
-	f := excelize.NewFile()
-	defer func() { _ = f.Close() }()
+    f := excelize.NewFile()
+    defer func() { _ = f.Close() }()
 
-	downloadedAt := time.Now()
-	periodLabel := formatPeriod(from, to)
+    // --- Buat style untuk border ---
+    borderStyle, err := f.NewStyle(&excelize.Style{
+        Border: []excelize.Border{
+            {Type: "left", Color: "000000", Style: 1},
+            {Type: "top", Color: "000000", Style: 1},
+            {Type: "bottom", Color: "000000", Style: 1},
+            {Type: "right", Color: "000000", Style: 1},
+        },
+    })
+    if err != nil {
+        httpx.Err(w, http.StatusInternalServerError, "failed to build styles")
+        return
+    }
 
-	if err := writeSummarySheet(f, balances, periodLabel, downloadedAt); err != nil {
-		httpx.Err(w, http.StatusInternalServerError, "failed to build workbook")
-		return
-	}
-	if err := writeHistorySheet(f, history, periodLabel, downloadedAt); err != nil {
-		httpx.Err(w, http.StatusInternalServerError, "failed to build workbook")
-		return
-	}
-	if err := writeFinanceSheet(f, finRows, periodLabel, downloadedAt); err != nil {
-		httpx.Err(w, http.StatusInternalServerError, "failed to build workbook")
-		return
-	}
-	// remove default "Sheet1" if it still exists after we renamed/created ours
-	_ = f.DeleteSheet("Sheet1")
+    downloadedAt := time.Now()
+    periodLabel := formatPeriod(from, to)
 
-	filename := fmt.Sprintf("inventory-%s.xlsx", downloadedAt.Format("20060102-1504"))
-	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
-	w.Header().Set("Cache-Control", "no-store")
-	if err := f.Write(w); err != nil {
-		// client may have disconnected; nothing useful to return
-		return
+    // Tambahkan parameter borderStyle ke setiap fungsi write
+    if err := writeSummarySheet(f, balances, periodLabel, downloadedAt, borderStyle); err != nil {
+        httpx.Err(w, http.StatusInternalServerError, "failed to build workbook")
+        return
+    }
+    if err := writeHistorySheet(f, history, periodLabel, downloadedAt, borderStyle); err != nil {
+        httpx.Err(w, http.StatusInternalServerError, "failed to build workbook")
+        return
+    }
+    if err := writeFinanceSheet(f, finRows, periodLabel, downloadedAt, borderStyle); err != nil {
+        httpx.Err(w, http.StatusInternalServerError, "failed to build workbook")
+        return
+    }
+    
+    // remove default "Sheet1" if it still exists after we renamed/created ours
+    _ = f.DeleteSheet("Sheet1")
+
+    filename := fmt.Sprintf("inventory-%s.xlsx", downloadedAt.Format("20060102-1504"))
+    w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+    w.Header().Set("Cache-Control", "no-store")
+    if err := f.Write(w); err != nil {
+        return
 	}
 }
 
@@ -199,130 +214,145 @@ func (h *Handler) loadFinance(r *http.Request, uid int64, from, to time.Time) ([
 
 // --- sheet writers ---
 
-func writeSummarySheet(f *excelize.File, rows []balanceRow, period string, at time.Time) error {
-	const name = "Ringkasan Stok"
-	idx, err := f.NewSheet(name)
-	if err != nil {
-		return err
-	}
-	f.SetActiveSheet(idx)
+func writeSummarySheet(f *excelize.File, rows []balanceRow, period string, at time.Time, styleID int) error {
+    const name = "Ringkasan Stok"
+    idx, err := f.NewSheet(name)
+    if err != nil {
+        return err
+    }
+    f.SetActiveSheet(idx)
 
-	_ = f.SetCellValue(name, "A1", "Export Inventory — Ringkasan Stok")
-	_ = f.SetCellValue(name, "A2", "Periode: "+period)
-	_ = f.SetCellValue(name, "A3", "Diunduh: "+at.Format("02 Jan 2006 15:04"))
+    _ = f.SetCellValue(name, "A1", "Export Inventory — Ringkasan Stok")
+    _ = f.SetCellValue(name, "A2", "Periode:")
+    _ = f.SetCellValue(name, "B2", period)
+    _ = f.SetCellValue(name, "A3", "Diunduh:")
+    _ = f.SetCellValue(name, "B3", at.Format("02 Jan 2006 15:04"))
 
-	headerRow := 5
-	for i, c := range summaryCols {
-		cell, _ := excelize.CoordinatesToCellName(i+1, headerRow)
-		_ = f.SetCellValue(name, cell, c.Header)
-		colName, _ := excelize.ColumnNumberToName(i + 1)
-		_ = f.SetColWidth(name, colName, colName, c.Width)
-	}
+    headerRow := 5
+    for i, c := range summaryCols {
+        cellName, _ := excelize.CoordinatesToCellName(i+1, headerRow)
+        _ = f.SetCellValue(name, cellName, c.Header)
+        colName, _ := excelize.ColumnNumberToName(i + 1)
+        _ = f.SetColWidth(name, colName, colName, c.Width)
+    }
 
-	for i, row := range rows {
-		r := headerRow + 1 + i
-		_ = f.SetCellValue(name, cell(1, r), row.Name)
-		_ = f.SetCellValue(name, cell(2, r), row.SKU)
-		_ = f.SetCellValue(name, cell(3, r), row.Quantity)
-		_ = f.SetCellValue(name, cell(4, r), row.Location)
-	}
+    for i, row := range rows {
+        r := headerRow + 1 + i
+        _ = f.SetCellValue(name, cell(1, r), row.Name)
+        _ = f.SetCellValue(name, cell(2, r), row.SKU)
+        _ = f.SetCellValue(name, cell(3, r), row.Quantity)
+        _ = f.SetCellValue(name, cell(4, r), row.Location)
+    }
 
-	if len(rows) >= maxBalanceRows {
-		note := headerRow + 1 + len(rows)
-		_ = f.SetCellValue(name, cell(1, note), fmt.Sprintf("(data dibatasi %d baris)", maxBalanceRows))
-	}
-	return nil
+    // Aplikasikan border ke header sampai data terakhir
+    _ = f.SetCellStyle(name, cell(1, headerRow), cell(len(summaryCols), headerRow+len(rows)), styleID)
+
+    if len(rows) >= maxBalanceRows {
+        note := headerRow + 1 + len(rows)
+        _ = f.SetCellValue(name, cell(1, note), fmt.Sprintf("(data dibatasi %d baris)", maxBalanceRows))
+    }
+    return nil
 }
 
-func writeHistorySheet(f *excelize.File, rows []historyRow, period string, at time.Time) error {
-	const name = "Riwayat"
-	if _, err := f.NewSheet(name); err != nil {
-		return err
-	}
+func writeHistorySheet(f *excelize.File, rows []historyRow, period string, at time.Time, styleID int) error {
+    const name = "Riwayat"
+    if _, err := f.NewSheet(name); err != nil {
+        return err
+    }
 
-	_ = f.SetCellValue(name, "A1", "Export Inventory — Riwayat Keluar/Masuk")
-	_ = f.SetCellValue(name, "A2", "Periode: "+period)
-	_ = f.SetCellValue(name, "A3", "Diunduh: "+at.Format("02 Jan 2006 15:04"))
+    _ = f.SetCellValue(name, "A1", "Export Inventory — Riwayat Keluar/Masuk")
+    _ = f.SetCellValue(name, "A2", "Periode:")
+    _ = f.SetCellValue(name, "B2", period)
+    _ = f.SetCellValue(name, "A3", "Diunduh:")
+    _ = f.SetCellValue(name, "B3", at.Format("02 Jan 2006 15:04"))
 
-	headerRow := 5
-	for i, c := range historyCols {
-		cell, _ := excelize.CoordinatesToCellName(i+1, headerRow)
-		_ = f.SetCellValue(name, cell, c.Header)
-		colName, _ := excelize.ColumnNumberToName(i + 1)
-		_ = f.SetColWidth(name, colName, colName, c.Width)
-	}
+    headerRow := 5
+    for i, c := range historyCols {
+        cellName, _ := excelize.CoordinatesToCellName(i+1, headerRow)
+        _ = f.SetCellValue(name, cellName, c.Header)
+        colName, _ := excelize.ColumnNumberToName(i + 1)
+        _ = f.SetColWidth(name, colName, colName, c.Width)
+    }
 
-	for i, row := range rows {
-		r := headerRow + 1 + i
-		dir := "Masuk"
-		if row.Direction == "out" {
-			dir = "Keluar"
-		}
-		_ = f.SetCellValue(name, cell(1, r), row.Name)
-		_ = f.SetCellValue(name, cell(2, r), row.SKU)
-		_ = f.SetCellValue(name, cell(3, r), dir)
-		_ = f.SetCellValue(name, cell(4, r), row.Quantity)
-		_ = f.SetCellValue(name, cell(5, r), row.CreatedAt.Format("02 Jan 2006 15:04"))
-		_ = f.SetCellValue(name, cell(6, r), row.Location)
-	}
+    for i, row := range rows {
+        r := headerRow + 1 + i
+        dir := "Masuk"
+        if row.Direction == "out" {
+            dir = "Keluar"
+        }
+        _ = f.SetCellValue(name, cell(1, r), row.Name)
+        _ = f.SetCellValue(name, cell(2, r), row.SKU)
+        _ = f.SetCellValue(name, cell(3, r), dir)
+        _ = f.SetCellValue(name, cell(4, r), row.Quantity)
+        _ = f.SetCellValue(name, cell(5, r), row.CreatedAt.Format("02 Jan 2006 15:04"))
+        _ = f.SetCellValue(name, cell(6, r), row.Location)
+    }
 
-	if len(rows) >= maxHistoryRows {
-		note := headerRow + 1 + len(rows)
-		_ = f.SetCellValue(name, cell(1, note), fmt.Sprintf("(data dibatasi %d baris)", maxHistoryRows))
-	}
-	return nil
+    // Aplikasikan border ke range tabel riwayat
+    _ = f.SetCellStyle(name, cell(1, headerRow), cell(len(historyCols), headerRow+len(rows)), styleID)
+
+    if len(rows) >= maxHistoryRows {
+        note := headerRow + 1 + len(rows)
+        _ = f.SetCellValue(name, cell(1, note), fmt.Sprintf("(data dibatasi %d baris)", maxHistoryRows))
+    }
+    return nil
 }
 
-func writeFinanceSheet(f *excelize.File, rows []financeRow, period string, at time.Time) error {
-	const name = "Keuangan"
-	if _, err := f.NewSheet(name); err != nil {
-		return err
-	}
+func writeFinanceSheet(f *excelize.File, rows []financeRow, period string, at time.Time, styleID int) error {
+    const name = "Keuangan"
+    if _, err := f.NewSheet(name); err != nil {
+        return err
+    }
 
-	_ = f.SetCellValue(name, "A1", "Export Inventory — Catatan Keuangan")
-	_ = f.SetCellValue(name, "A2", "Periode: "+period)
-	_ = f.SetCellValue(name, "A3", "Diunduh: "+at.Format("02 Jan 2006 15:04"))
+    _ = f.SetCellValue(name, "A1", "Export Inventory — Catatan Keuangan")
+    _ = f.SetCellValue(name, "A2", "Periode:")
+    _ = f.SetCellValue(name, "B2", period)
+    _ = f.SetCellValue(name, "A3", "Diunduh:")
+    _ = f.SetCellValue(name, "B3", at.Format("02 Jan 2006 15:04"))
 
-	var totalIncome, totalExpense int64
-	for _, row := range rows {
-		if row.EntryType == "income" {
-			totalIncome += row.Amount
-		} else {
-			totalExpense += row.Amount
-		}
-	}
-	_ = f.SetCellValue(name, "A5", "Total Pemasukan")
-	_ = f.SetCellValue(name, "B5", totalIncome)
-	_ = f.SetCellValue(name, "A6", "Total Pengeluaran")
-	_ = f.SetCellValue(name, "B6", totalExpense)
-	_ = f.SetCellValue(name, "A7", "Saldo Bersih")
-	_ = f.SetCellValue(name, "B7", totalIncome-totalExpense)
+    var totalIncome, totalExpense int64
+    for _, row := range rows {
+        if row.EntryType == "income" {
+            totalIncome += row.Amount
+        } else {
+            totalExpense += row.Amount
+        }
+    }
+    _ = f.SetCellValue(name, "A5", "Total Pemasukan")
+    _ = f.SetCellValue(name, "B5", totalIncome)
+    _ = f.SetCellValue(name, "A6", "Total Pengeluaran")
+    _ = f.SetCellValue(name, "B6", totalExpense)
+    _ = f.SetCellValue(name, "A7", "Saldo Bersih")
+    _ = f.SetCellValue(name, "B7", totalIncome-totalExpense)
 
-	headerRow := 9
-	for i, c := range financeCols {
-		_ = f.SetCellValue(name, cell(i+1, headerRow), c.Header)
-		colName, _ := excelize.ColumnNumberToName(i + 1)
-		_ = f.SetColWidth(name, colName, colName, c.Width)
-	}
+    headerRow := 9
+    for i, c := range financeCols {
+        _ = f.SetCellValue(name, cell(i+1, headerRow), c.Header)
+        colName, _ := excelize.ColumnNumberToName(i + 1)
+        _ = f.SetColWidth(name, colName, colName, c.Width)
+    }
 
-	for i, row := range rows {
-		r := headerRow + 1 + i
-		jenis := "Pemasukan"
-		if row.EntryType == "expense" {
-			jenis = "Pengeluaran"
-		}
-		_ = f.SetCellValue(name, cell(1, r), row.EntryDate)
-		_ = f.SetCellValue(name, cell(2, r), jenis)
-		_ = f.SetCellValue(name, cell(3, r), row.Category)
-		_ = f.SetCellValue(name, cell(4, r), row.Notes)
-		_ = f.SetCellValue(name, cell(5, r), row.Amount)
-	}
+    for i, row := range rows {
+        r := headerRow + 1 + i
+        jenis := "Pemasukan"
+        if row.EntryType == "expense" {
+            jenis = "Pengeluaran"
+        }
+        _ = f.SetCellValue(name, cell(1, r), row.EntryDate)
+        _ = f.SetCellValue(name, cell(2, r), jenis)
+        _ = f.SetCellValue(name, cell(3, r), row.Category)
+        _ = f.SetCellValue(name, cell(4, r), row.Notes)
+        _ = f.SetCellValue(name, cell(5, r), row.Amount)
+    }
 
-	if len(rows) >= maxHistoryRows {
-		note := headerRow + 1 + len(rows)
-		_ = f.SetCellValue(name, cell(1, note), fmt.Sprintf("(data dibatasi %d baris)", maxHistoryRows))
-	}
-	return nil
+    // Aplikasikan border ke range tabel keuangan
+    _ = f.SetCellStyle(name, cell(1, headerRow), cell(len(financeCols), headerRow+len(rows)), styleID)
+
+    if len(rows) >= maxHistoryRows {
+        note := headerRow + 1 + len(rows)
+        _ = f.SetCellValue(name, cell(1, note), fmt.Sprintf("(data dibatasi %d baris)", maxHistoryRows))
+    }
+    return nil
 }
 
 // --- helpers ---

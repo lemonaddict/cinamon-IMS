@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { LayoutDashboard, Package, ArrowLeftRight, Wallet, History as IconHistory, RefreshCw, Settings, LogOut, Boxes, Wifi, WifiOff, CloudOff } from 'lucide-svelte';
+  import { LayoutDashboard, Package, ArrowLeftRight, Wallet, History as IconHistory, RefreshCw, Settings, LogOut, Boxes, Wifi, WifiOff, CloudOff, Users } from 'lucide-svelte';
   import { api } from './api';
   import { online, pending, setUser, sync, clearCache, cached } from './offline';
   import Login from './Login.svelte';
@@ -11,6 +11,7 @@
   import History from './History.svelte';
   import Sync from './Sync.svelte';
   import Setup from './Setup.svelte';
+  import Admin from './Admin.svelte';
 
   // sec = secondary: shown in the sidebar on desktop, moved to the header on phones
   const tabs = [
@@ -21,14 +22,17 @@
     { id: 'history', label: 'Riwayat', icon: IconHistory, sec: false },
     { id: 'sync', label: 'Sinkron', icon: RefreshCw, sec: true },
     { id: 'setup', label: 'Pengaturan', icon: Settings, sec: true },
+    { id: 'admin', label: 'Pengguna', icon: Users, sec: true, adminOnly: true },
   ];
-  const pages: Record<string, any> = { dashboard: Dashboard, products: Products, stock: Stock, finance: Finance, history: History, sync: Sync, setup: Setup };
+  const pages: Record<string, any> = { dashboard: Dashboard, products: Products, stock: Stock, finance: Finance, history: History, sync: Sync, setup: Setup, admin: Admin };
 
-  let user: { id: number; name: string } | null = null;
+  let user: { id: number; name: string; role?: string } | null = null;
   let ready = false;
   let tab = 'dashboard';
 
-  function start(u: { id: number; name: string }) {
+  $: visibleTabs = tabs.filter((t) => !t.adminOnly || user?.role === 'admin');
+
+  function start(u: { id: number; name: string; role?: string }) {
     user = u;
     setUser(u.id);
     sync();
@@ -53,7 +57,7 @@
     <aside class="side">
       <div class="brand"><Boxes size={26} /> CIMOL</div>
       <nav>
-        {#each tabs as t}
+        {#each visibleTabs as t}
           <button class:on={tab === t.id} class:sec={t.sec} aria-current={tab === t.id ? 'page' : undefined} on:click={() => (tab = t.id)}>
             <svelte:component this={t.icon} size={22} /><span>{t.label}</span>
             {#if t.id === 'sync' && $pending > 0}<em>{$pending}</em>{/if}
@@ -64,8 +68,8 @@
     <div class="content">
       <header class="top">
         <div>
-          <h1>{tabs.find((t) => t.id === tab)?.label}</h1>
-          <span class="muted">Halo, {user.name}</span>
+          <h1>{visibleTabs.find((t) => t.id === tab)?.label}</h1>
+          <span class="muted">Halo, {user.name}{#if user.role === 'admin'} · Admin{/if}</span>
         </div>
         <div class="cell">
           <button class="pill" class:off={!$online} on:click={() => (tab = 'sync')} aria-label="Status koneksi dan sinkronisasi">
