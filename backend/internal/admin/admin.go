@@ -19,12 +19,14 @@ type Handler struct {
 }
 
 func (h *Handler) Routes(r chi.Router) {
-	r.Use(auth.RequireAdmin)
-	r.Get("/admin/users", h.list)
-	r.Post("/admin/users", h.create)
-	r.Put("/admin/users/{id}/status", h.setStatus)
-	r.Put("/admin/users/{id}/role", h.setRole)
-	r.Put("/admin/users/{id}/password", h.setPassword)
+	r.Route("/admin", func(ar chi.Router) {
+		ar.Use(auth.RequireAdmin)
+		ar.Get("/users", h.list)
+		ar.Post("/users", h.create)
+		ar.Put("/users/{id}/status", h.setStatus)
+		ar.Put("/users/{id}/role", h.setRole)
+		ar.Put("/users/{id}/password", h.setPassword)
+	})
 }
 
 type userRow struct {
