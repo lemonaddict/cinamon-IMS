@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { Tags, MapPin, Plus, Trash2, Inbox, Sun, Moon, Monitor, HelpCircle } from 'lucide-svelte';
+  import { Tags, MapPin, Plus, Pencil, Save, X, Trash2, Inbox, Sun, Moon, Monitor, HelpCircle } from 'lucide-svelte';
   import { api, msg } from './api';
   import { cached } from './offline';
   import { startPageTour, shouldAutoTour } from './tour';
@@ -32,6 +32,7 @@
   ];
   let data: Record<string, Row[]> = { categories: [], locations: [] };
   let names: Record<string, string> = { categories: '', locations: '' };
+  let editing: { k: string; id: number; name: string } | null = null;
   let error = '';
 
   async function load() {
@@ -43,7 +44,15 @@
     try { await fn(); await load(); } catch (e) { error = msg(e); }
   }
   const add = (k: string) => run(async () => { await api(`/${k}`, 'POST', { name: names[k] }); names[k] = ''; });
-  const del = (k: string, r: Row) => confirm(`Hapus "${r.name}"?`) && run(() => api(`/${k}/${r.id}`, 'DELETE'));
+  const saveEdit = () => editing && run(async () => {
+    const cur = editing!;
+    await api(`/${cur.k}/${cur.id}`, 'PUT', { name: cur.name });
+    editing = null;
+  });
+  const del = (k: string, r: Row) => confirm(`Hapus "${r.name}"?`) && run(async () => {
+    await api(`/${k}/${r.id}`, 'DELETE');
+    if (editing?.k === k && editing?.id === r.id) editing = null;
+  });
   load().catch((e) => (error = msg(e)));
 
   let activeTour: ReturnType<typeof startPageTour> | null = null;
@@ -113,8 +122,22 @@
         <button class="btn"><Plus size={18} /> {kind.add}</button>
       </form>
       {#each data[kind.k] as row (row.id)}
-        <div class="row"><span>{row.name}</span>
-          <button class="btn danger sm" on:click={() => del(kind.k, row)} aria-label="Hapus {row.name}"><Trash2 size={14} /> Hapus</button></div>
+        {#if editing && editing.k === kind.k && editing.id === row.id}
+          <form class="row" on:submit|preventDefault={saveEdit}>
+            <label class="field"><input bind:value={editing.name} required aria-label="Edit nama {row.name}" /></label>
+            <span class="cell" style="gap: 6px;">
+              <button class="btn sm"><Save size={14} /> Simpan</button>
+              <button type="button" class="btn ghost sm" on:click={() => (editing = null)}><X size={14} /> Batal</button>
+            </span>
+          </form>
+        {:else}
+          <div class="row"><span>{row.name}</span>
+            <span class="cell" style="gap: 6px;">
+              <button type="button" class="btn ghost sm" on:click={() => (editing = { k: kind.k, id: row.id, name: row.name })} aria-label="Edit {row.name}"><Pencil size={14} /> Edit</button>
+              <button class="btn danger sm" on:click={() => del(kind.k, row)} aria-label="Hapus {row.name}"><Trash2 size={14} /> Hapus</button>
+            </span>
+          </div>
+        {/if}
       {:else}
         <div class="empty"><Inbox size={30} />{kind.empty}</div>
       {/each}

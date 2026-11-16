@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { ChevronDown, Check, Search } from 'lucide-svelte';
+  import { ChevronDown, Check, Search, Plus } from 'lucide-svelte';
 
   export let value: any = null;
   export let options: { value: any; label: string }[] = [];
@@ -8,6 +8,8 @@
   export let icon: any = null;
   export let placeholder = 'Pilih…';
   export let searchable = false;
+  export let onAdd: (() => void) | null = null;
+  export let addLabel = 'Tambah';
 
   let open = false;
   let query = '';
@@ -49,10 +51,17 @@
     <button type="button" class="dd-backdrop" aria-label="Tutup pilihan" tabindex="-1" on:click={() => (open = false)}></button>
     <div class="dd-list" role="listbox" aria-label={label}>
       {#if searchable}
-        <label class="field dd-search">
-          <Search size={15} />
-          <input bind:this={searchEl} bind:value={query} placeholder="Cari…" aria-label="Cari {label}" />
-        </label>
+        <div class="dd-top">
+          <label class="field dd-search">
+            <Search size={15} />
+            <input bind:this={searchEl} bind:value={query} placeholder="Cari…" aria-label="Cari {label}" />
+          </label>
+          {#if onAdd}
+            <button type="button" class="btn sm dd-add" title={addLabel} aria-label={addLabel} on:click={() => { open = false; onAdd?.(); }}>
+              <Plus size={16} />
+            </button>
+          {/if}
+        </div>
       {/if}
       {#each filtered as o}
         <button type="button" role="option" aria-selected={o.value === value} class:on={o.value === value} on:click={() => pick(o.value)}>
