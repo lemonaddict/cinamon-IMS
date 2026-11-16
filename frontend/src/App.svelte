@@ -46,6 +46,9 @@
     await clearCache();
     user = null;
   }
+  function onNavigate(e: CustomEvent<string>) {
+    tab = e.detail;
+  }
 </script>
 
 {#if !ready}
@@ -83,7 +86,7 @@
       {#if !$online}
         <div class="note"><CloudOff size={18} /> Mode offline: perubahan stok disimpan di perangkat dan dikirim otomatis saat tersambung.</div>
       {/if}
-      <main><svelte:component this={pages[tab]} /></main>
+      <main><svelte:component this={pages[tab]} on:navigate={onNavigate} /></main>
     </div>
   </div>
 {/if}
