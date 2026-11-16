@@ -209,7 +209,7 @@
   <h3><Package size={18} /> Stok saat ini</h3>
   <div class="wrap">
     <table>
-      <thead><tr><th>Produk</th><th>SKU</th><th>Lokasi</th><th>Jumlah</th></tr></thead>
+      <thead><tr><th>Produk</th><th>Kode</th><th>Lokasi</th><th>Jumlah</th></tr></thead>
       <tbody>
         {#each pagedBalances as b}
           <tr><td>{b.product}</td><td>{b.sku}</td><td>{b.location}</td><td><b>{b.quantity}</b></td></tr>

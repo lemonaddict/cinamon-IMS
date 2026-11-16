@@ -77,7 +77,7 @@
         element: '[data-tour="prod-form"]',
         popover: {
           title: 'Tambah & Edit Produk',
-          description: 'Isi nama produk, SKU, harga beli, harga jual, kategori, dan deskripsi lalu klik Simpan produk.',
+          description: 'Isi nama produk, kode, harga beli, harga jual, kategori, dan deskripsi lalu klik Simpan produk.',
           side: 'bottom',
           align: 'start',
         },
@@ -86,7 +86,7 @@
         element: '[data-tour="prod-search"]',
         popover: {
           title: 'Cari Produk',
-          description: 'Ketik nama produk atau SKU di sini untuk menyaring daftar produk dengan cepat.',
+          description: 'Ketik nama produk atau kode di sini untuk menyaring daftar produk dengan cepat.',
           side: 'bottom',
           align: 'start',
         },
@@ -119,13 +119,31 @@
 
 <div class="card" data-tour="prod-form">
   <h3>{#if editingId !== null}<Pencil size={18} /> Edit produk{:else}<Plus size={18} /> Tambah produk{/if}</h3>
-  <form on:submit|preventDefault={save}>
-    <label class="field"><Package size={18} /><input placeholder="Nama produk" bind:value={f.name} required /></label>
-    <label class="field"><Tag size={18} /><input placeholder="SKU" bind:value={f.sku} required /></label>
-    <label class="field"><Banknote size={18} /><input type="number" min="0" placeholder="Harga beli" title="Harga beli (HPP)" bind:value={f.cost_price} /></label>
-    <label class="field"><Banknote size={18} /><input type="number" min="0" placeholder="Harga jual" title="Harga jual" bind:value={f.selling_price} /></label>
-    <Select bind:value={f.category_id} label="Kategori" placeholder="Pilih kategori" searchable options={catOptions} />
-    <label class="field"><input placeholder="Deskripsi (opsional)" bind:value={f.description} /></label>
+  <form class="prod-form" on:submit|preventDefault={save}>
+    <div class="fg">
+      <label class="fg-lbl" for="prod-name">Nama produk</label>
+      <label class="field"><Package size={18} /><input id="prod-name" placeholder="Nama produk" bind:value={f.name} required /></label>
+    </div>
+    <div class="fg">
+      <label class="fg-lbl" for="prod-sku">Kode</label>
+      <label class="field"><Tag size={18} /><input id="prod-sku" placeholder="Kode" bind:value={f.sku} required /></label>
+    </div>
+    <div class="fg">
+      <label class="fg-lbl" for="prod-cost">Harga beli</label>
+      <label class="field"><Banknote size={18} /><input id="prod-cost" type="number" min="0" placeholder="0" bind:value={f.cost_price} /></label>
+    </div>
+    <div class="fg">
+      <label class="fg-lbl" for="prod-sell">Harga jual</label>
+      <label class="field"><Banknote size={18} /><input id="prod-sell" type="number" min="0" placeholder="0" bind:value={f.selling_price} /></label>
+    </div>
+    <div class="fg">
+      <span class="fg-lbl">Kategori</span>
+      <Select bind:value={f.category_id} label="Kategori" placeholder="Pilih kategori" searchable options={catOptions} />
+    </div>
+    <div class="fg">
+      <label class="fg-lbl" for="prod-desc">Deskripsi</label>
+      <label class="field"><input id="prod-desc" placeholder="Opsional" bind:value={f.description} /></label>
+    </div>
     <button class="btn">{#if editingId !== null}<Save size={18} /> Simpan perubahan{:else}<Plus size={18} /> Simpan produk{/if}</button>
     {#if editingId !== null}
       <button type="button" class="btn ghost" on:click={cancelEdit}><X size={18} /> Batal</button>
@@ -135,10 +153,10 @@
 </div>
 
 <div class="card">
-  <label class="field" data-tour="prod-search" style="margin-bottom: 12px;"><Search size={18} /><input placeholder="Cari nama atau SKU" bind:value={q} /></label>
+  <label class="field" data-tour="prod-search" style="margin-bottom: 12px;"><Search size={18} /><input placeholder="Cari nama atau kode" bind:value={q} /></label>
   <div class="wrap" data-tour="prod-table">
     <table>
-      <thead><tr><th>Produk</th><th>SKU</th><th>Harga Beli</th><th>Harga Jual</th><th>Kategori</th><th></th></tr></thead>
+      <thead><tr><th>Produk</th><th>Kode</th><th>Harga Beli</th><th>Harga Jual</th><th>Kategori</th><th></th></tr></thead>
       <tbody>
         {#each paged as p (p.id)}
           <tr>
@@ -162,3 +180,14 @@
   </div>
   <Pagination bind:page total={shown.length} {perPage} />
 </div>
+
+<style>
+  .prod-form { align-items: flex-end; }
+  .fg { flex: 1 1 180px; display: grid; gap: 5px; min-width: 0; }
+  .fg-lbl { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .fg :global(.field), .fg :global(.dd) { flex: none; }
+  .prod-form .btn { height: 44px; }
+  @media (max-width: 820px) {
+    .fg { flex: 1 1 100%; }
+  }
+</style>

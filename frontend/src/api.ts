@@ -23,7 +23,7 @@ const ID: Record<string, string> = {
   'stock changed since the count; please recount': 'Stok di server berubah sejak penghitungan. Hitung ulang.',
   'name, a valid email and a 10-72 character password are required': 'Isi nama, email yang valid, dan kata sandi 10–72 karakter.',
   'name is required (max 200 characters)': 'Nama wajib diisi (maksimal 200 karakter).',
-  'name (max 200) and sku (max 64) are required; description max 2000': 'Nama dan SKU wajib diisi.',
+  'name (max 200) and sku (max 64) are required; description max 2000': 'Nama dan Kode wajib diisi.',
   'cost_price and selling_price must be 0 or greater': 'Harga beli dan harga jual minimal 0.',
   'entry_type must be income or expense': 'Jenis transaksi harus pemasukan atau pengeluaran.',
   'category is required (max 100 characters)': 'Kategori wajib diisi (maksimal 100 karakter).',
