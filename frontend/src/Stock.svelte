@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { ArrowDownToLine, ArrowUpFromLine, SlidersHorizontal, ClipboardCheck, ArrowLeftRight, Package, MapPin, Banknote, Plus, Trash2, Save, Inbox, CloudOff, CheckCircle2, HelpCircle } from 'lucide-svelte';
   import { msg, idr } from './api';
   import { cached, submit } from './offline';
   import Select from './Select.svelte';
   import Pagination from './Pagination.svelte';
   import { startPageTour, shouldAutoTour } from './tour';
+
+  const dispatch = createEventDispatcher<{ navigate: string }>();
 
   type Opt = { id: number; name: string; sku?: string; cost_price?: number; selling_price?: number };
   type Bal = { sku: string; product: string; location: string; quantity: number };
@@ -156,7 +158,7 @@
       {#each rows as r, i (i)}
         <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
           <Select bind:value={r.product_id} label="Produk" placeholder="Pilih produk" searchable icon={Package} options={productOptions} />
-          <Select bind:value={r.location_id} label="Lokasi" placeholder="Pilih lokasi" searchable icon={MapPin} options={locationOptions} />
+          <Select bind:value={r.location_id} label="Lokasi" placeholder="Pilih lokasi" searchable onAdd={() => dispatch('navigate', 'setup')} addLabel="Tambah lokasi di Pengaturan" icon={MapPin} options={locationOptions} />
           {#if moveType === 'adjustment'}
             <Select bind:value={r.direction} label="Arah penyesuaian" icon={SlidersHorizontal} options={dirOptions} />
           {/if}
@@ -188,7 +190,7 @@
   <div class="card" data-tour="stock-opname">
     <h3><ClipboardCheck size={18} /> Hitung stok di lokasi</h3>
     <form on:submit|preventDefault={opname} style="margin-bottom: 10px;">
-      <Select bind:value={opLoc} label="Lokasi hitung" placeholder="Pilih lokasi" searchable icon={MapPin} options={locationOptions} />
+      <Select bind:value={opLoc} label="Lokasi hitung" placeholder="Pilih lokasi" searchable onAdd={() => dispatch('navigate', 'setup')} addLabel="Tambah lokasi di Pengaturan" icon={MapPin} options={locationOptions} />
       <button class="btn"><Save size={18} /> Simpan hasil hitung</button>
     </form>
     <div class="wrap">
