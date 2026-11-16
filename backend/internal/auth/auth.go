@@ -154,7 +154,7 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 		sum := sha256.Sum256([]byte(c.Value))
 		_, _ = h.DB.Exec(r.Context(), `DELETE FROM sessions WHERE token_hash = $1`, sum[:])
 	}
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Path: "/", MaxAge: -1, HttpOnly: true, Secure: h.Secure, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, h.sessionCookie("", -1))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -166,6 +166,24 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"id": uid, "name": name, "email": email, "role": role})
+}
+
+func (h *Handler) sessionCookie(value string, maxAge int) *http.Cookie {
+	c := &http.Cookie{
+		Name:     cookieName,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   h.Secure,
+		MaxAge:   maxAge,
+	}
+	// Cross-origin SPAs require SameSite=None; otherwise the browser will not send the cookie.
+	if h.Secure {
+		c.SameSite = http.SameSiteNoneMode
+	} else {
+		c.SameSite = http.SameSiteLaxMode
+	}
+	return c
 }
 
 func (h *Handler) startSession(w http.ResponseWriter, r *http.Request, uid int64) error {
@@ -180,8 +198,7 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request, uid int64
 		sum[:], uid, time.Now().Add(sessionTTL)); err != nil {
 		return err
 	}
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: token, Path: "/", HttpOnly: true,
-		Secure: h.Secure, SameSite: http.SameSiteLaxMode, MaxAge: int(sessionTTL.Seconds())})
+	http.SetCookie(w, h.sessionCookie(token, int(sessionTTL.Seconds())))
 	return nil
 }
 
