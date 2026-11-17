@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { Plus, Pencil, Save, X, Trash2, Search, Package, Tag, Banknote, Inbox, HelpCircle } from 'lucide-svelte';
   import { api, msg, idr } from './api';
   import { cached } from './offline';
   import Select from './Select.svelte';
   import Pagination from './Pagination.svelte';
   import { startPageTour, shouldAutoTour } from './tour';
+
+  const dispatch = createEventDispatcher<{ navigate: string }>();
 
   type Cat = { id: number; name: string };
   type Product = { id: number; name: string; sku: string; cost_price: number; selling_price: number; description: string; category_id: number | null };
@@ -138,7 +140,7 @@
     </div>
     <div class="fg">
       <span class="fg-lbl">Kategori</span>
-      <Select bind:value={f.category_id} label="Kategori" placeholder="Pilih kategori" searchable options={catOptions} />
+      <Select bind:value={f.category_id} label="Kategori" placeholder="Pilih kategori" searchable onAdd={() => dispatch('navigate', 'setup')} addLabel="Tambah kategori di Pengaturan" options={catOptions} />
     </div>
     <div class="fg">
       <label class="fg-lbl" for="prod-desc">Deskripsi</label>

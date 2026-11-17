@@ -147,13 +147,15 @@ select { appearance: none; -webkit-appearance: none; text-overflow: ellipsis; pa
 .dd-btn { width: 100%; font: inherit; text-align: left; cursor: pointer; min-height: 44px; }
 .dd-val { flex: 1; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dd-backdrop { position: fixed; inset: 0; z-index: 40; border: 0; padding: 0; background: transparent; cursor: default; }
-.dd-list { position: absolute; z-index: 50; left: 0; right: 0; top: calc(100% + 6px); max-height: 260px; overflow: auto; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(40, 20, 120, .18); }
+.dd-list { position: absolute; z-index: 50; left: 0; right: 0; top: calc(100% + 6px); max-height: 260px; overflow-y: auto; overflow-x: hidden; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(40, 20, 120, .18); }
 .dd-list button { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .dd-list button:hover, .dd-list button.on { background: var(--soft); }
 .dd-list button.on { color: var(--pri); font-weight: 600; }
 .dd-empty { padding: 10px 12px; }
-.dd-search { position: sticky; top: 0; z-index: 1; margin-bottom: 6px; padding: 0 10px; }
-.dd-search input { padding: 7px 0; font-size: 14px; }
+.dd-top { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; width: 100%; margin-bottom: 6px; background: var(--panel); min-width: 0; }
+form .dd-top .dd-search, .dd-top .dd-search { width: 100%; min-width: 0; padding: 0 8px; }
+.dd-search input { padding: 6px 0; font-size: 14px; }
+form .dd-add, .dd-add { width: 36px; height: 36px; padding: 0; flex: none; border-radius: 10px; }
 
 /* driver.js tour theme */
 body .driver-popover { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
@@ -180,5 +182,6 @@ body .driver-popover-close-btn { color: var(--muted); }
   form .dd { flex: 1 1 100%; }
   .dd-backdrop { background: rgba(10, 8, 30, .45); }
   .dd-list { position: fixed; top: auto; bottom: 0; max-height: 60vh; padding: 10px 10px calc(14px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 18px 18px 0 0; box-shadow: 0 -12px 32px rgba(10, 8, 30, .3); }
+  .dd-list.dd-pop { position: absolute; top: calc(100% + 6px); bottom: auto; max-height: 260px; padding: 6px; border-width: 1px; border-radius: 12px; box-shadow: 0 12px 32px rgba(40, 20, 120, .18); }
   .dd-list button { padding: 14px 12px; font-size: 16px; }
 }
