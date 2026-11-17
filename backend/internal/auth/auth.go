@@ -169,21 +169,15 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) sessionCookie(value string, maxAge int) *http.Cookie {
-	c := &http.Cookie{
+	return &http.Cookie{
 		Name:     cookieName,
 		Value:    value,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   h.Secure,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   maxAge,
 	}
-	// Cross-origin SPAs require SameSite=None; otherwise the browser will not send the cookie.
-	if h.Secure {
-		c.SameSite = http.SameSiteNoneMode
-	} else {
-		c.SameSite = http.SameSiteLaxMode
-	}
-	return c
 }
 
 func (h *Handler) startSession(w http.ResponseWriter, r *http.Request, uid int64) error {
