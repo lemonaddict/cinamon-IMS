@@ -1,11 +1,11 @@
 module ims
 
-go 1.26.0
+go 1.26.11
 
 require (
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-chi/cors v1.2.2
-	github.com/jackc/pgx/v5 v5.7.1
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/joho/godotenv v1.5.1
 	github.com/xuri/excelize/v2 v2.11.1
 	golang.org/x/crypto v0.58.0
